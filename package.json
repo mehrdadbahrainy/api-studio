@@ -1,0 +1,40 @@
+{
+  "name": "api-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first, desktop REST API client built with Angular and Tauri",
+  "scripts": {
+    "start": "ng serve --host 127.0.0.1 --port 4200",
+    "build": "ng build --configuration production",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "test:core": "tsc -p tsconfig.core-tests.json && node --test tests/*.test.cjs",
+    "tauri": "tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
+  },
+  "dependencies": {
+    "@angular/common": "^21.2.0",
+    "@angular/compiler": "^21.2.0",
+    "@angular/core": "^21.2.0",
+    "@angular/forms": "^21.2.0",
+    "@angular/platform-browser": "^21.2.0",
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-http": "^2.0.0",
+    "rxjs": "^7.8.0",
+    "tslib": "^2.8.0",
+    "zone.js": "~0.16.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.2.0",
+    "@angular/cli": "^21.2.0",
+    "@angular/compiler-cli": "^21.2.0",
+    "@tauri-apps/cli": "^2.0.0",
+    "typescript": "~5.9.0",
+    "@playwright/test": "^1.56.0"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}
