@@ -1,0 +1,5 @@
+{
+  "compilerOptions": {"target":"ES2022","module":"CommonJS","moduleResolution":"node","strict":true,"skipLibCheck":true,"outDir":".test-dist","rootDir":"src/app/core","types":[],"lib":["ES2022","DOM","DOM.Iterable"]},
+  "include": ["src/app/core/*.ts"],
+  "exclude": ["src/app/core/http-transport.ts","src/app/core/storage.ts"]
+}
