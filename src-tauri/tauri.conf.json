@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "API Studio",
+  "version": "0.1.0",
+  "identifier": "io.github.mehrdadbahrainy.apistudio",
+  "build": {
+    "beforeDevCommand": "npm run start",
+    "devUrl": "http://127.0.0.1:4200",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist/api-studio/browser"
+  },
+  "app": {
+    "windows": [{
+      "title": "API Studio — REST Client",
+      "width": 1440,
+      "height": 940,
+      "minWidth": 780,
+      "minHeight": 620,
+      "backgroundColor": "#f7f8fc"
+    }],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "category": "DeveloperTool",
+    "shortDescription": "Local-first REST API client",
+    "targets": "all",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+  }
+}

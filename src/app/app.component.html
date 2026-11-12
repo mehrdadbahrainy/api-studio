@@ -1,0 +1,160 @@
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brandline">
+      <div class="brand-logo"><span class="brand-code">&lt;/&gt;</span></div>
+      <div class="brand-names"><strong>api<span>studio</span></strong><small>REST CLIENT</small></div>
+      <div class="brand-ver">v0.1</div>
+    </div>
+
+    <div class="workspace-title"><span class="eyebrow">WORKSPACE</span><strong>Personal workspace</strong><span class="offline-label"><i></i> Stored locally</span></div>
+    <div class="sidebar-tabs" role="tablist" aria-label="Sidebar views">
+      <button type="button" [class.selected]="sidebarTab==='collections'" (click)="sidebarTab='collections'">Collections</button>
+      <button type="button" [class.selected]="sidebarTab==='history'" (click)="sidebarTab='history'">History</button>
+    </div>
+    <div class="sidebar-scroll">
+      @if (sidebarTab==='collections') {
+        <div class="sidebar-heading"><span>YOUR COLLECTIONS <b>{{workspace.collections.length}}</b></span><button type="button" class="subtle-icon" (click)="showCreateCollection=true" title="New collection" aria-label="New collection"><svg class="ui-icon"><use href="assets/lucide.svg#plus"></use></svg></button></div>
+        <label class="search-box"><svg class="ui-icon search-symbol" aria-hidden="true"><use href="assets/lucide.svg#search"></use></svg><input [(ngModel)]="filter" placeholder="Filter requests..." aria-label="Filter requests"></label>
+        @if (showCreateCollection) {
+          <form class="inline-new" (submit)="$event.preventDefault();createCollection()"><input [(ngModel)]="newCollectionName" name="newCollectionName" placeholder="Collection name" maxlength="120" autofocus><button type="submit">Add</button><button type="button" (click)="showCreateCollection=false" aria-label="Cancel collection">×</button></form>
+        }
+        @for (collection of filteredCollections; track collection.id) {
+          <div class="collection-group">
+            <div class="collection-title" [title]="collection.name">
+              <svg class="ui-icon folder-glyph" aria-hidden="true"><use href="assets/lucide.svg#folder"></use></svg><span class="truncate">{{collection.name}}</span><small>{{collection.requests.length}}</small>
+              <button class="collection-delete" type="button" (click)="deleteCollection(collection)" [attr.aria-label]="'Delete ' + collection.name" title="Delete collection">×</button>
+            </div>
+            @for (req of collection.requests; track req.id) {
+              <button class="request-nav" type="button" (click)="selectRequest(req)" [class.active]="activeRequestId===req.id" [title]="req.url">
+                <span class="method-mini" [ngClass]="methodStyle(req.method)">{{req.method}}</span><span class="truncate">{{req.name}}</span>
+              </button>
+            } @empty {
+              <p class="collection-empty">No saved requests</p>
+            }
+          </div>
+        } @empty {
+          <div class="sidebar-empty">No matching collections</div>
+        }
+      } @else {
+        <div class="sidebar-heading"><span>RECENT REQUESTS <b>{{workspace.history.length}}</b></span><button type="button" class="subtle-icon" (click)="clearHistory()" title="Clear history" aria-label="Clear history">×</button></div>
+        @for (historyItem of workspace.history; track historyItem.id) {
+          <button type="button" class="history-item" (click)="selectHistory(historyItem)" [title]="historyItem.request.url">
+            <span class="method-mini" [ngClass]="methodStyle(historyItem.request.method)">{{historyItem.request.method}}</span>
+            <span class="history-info"><span class="truncate">{{historyItem.request.url}}</span><small>{{formatDate(historyItem.at)}}</small></span>
+            <span class="history-status" [class.ok]="historyItem.status!==null && historyItem.status<400">{{historyItem.status??'—'}}</span>
+          </button>
+        } @empty {<div class="sidebar-empty">Your recent requests will appear here.</div>}
+      }
+    </div>
+    <div class="sidebar-bottom">
+      <div class="sidebar-signal"><span class="signal-dot"></span><span>{{isDesktop?'Desktop mode':'Browser preview'}}</span><span class="signal-right">{{isDesktop?'Native HTTP':'CORS applies'}}</span></div>
+      <p>{{isDesktop?'Requests run locally on your machine. No account needed.':'Install the desktop app for unrestricted API testing.'}}</p>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="crumbs"><span>Workspace</span><span class="crumb-sep">/</span><strong>{{requestTitle}}</strong></div>
+      <div class="top-actions">
+        <button type="button" class="environment-button" (click)="toggleEnvironmentDialog()" aria-label="Edit environments"><svg class="ui-icon env-icon" aria-hidden="true"><use href="assets/lucide.svg#settings"></use></svg><span>{{activeEnvironment?.name??'No environment'}}</span><span class="downchevron">⌄</span></button>
+        <button type="button" class="header-icon-button" title="New request (Ctrl+N)" aria-label="New request" (click)="newRequest()"><svg class="ui-icon"><use href="assets/lucide.svg#plus"></use></svg></button>
+        <div class="menu-container">
+          <button type="button" class="header-icon-button ellipsis" (click)="showMenu=!showMenu" title="Workspace actions" aria-label="Workspace actions"><svg class="ui-icon"><use href="assets/lucide.svg#ellipsis"></use></svg></button>
+          @if (showMenu) {<div class="menu-popover"><button (click)="exportWorkspace()">Export workspace as JSON</button><label class="import-choice">Import workspace JSON<input type="file" accept=".json,application/json" (change)="importWorkspace($event)" hidden></label><button (click)="duplicateRequest();closePopup()">Duplicate request</button>@if(isSaved){<button class="danger" (click)="deleteRequest();closePopup()">Delete saved request</button>}</div>}
+        </div>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <div class="headline">
+        <div><p class="kicker">REQUEST BUILDER</p><h1><input class="request-name-input" [(ngModel)]="draft.name" maxlength="160" aria-label="Request name" placeholder="Untitled request"></h1><p class="subline">Create, send, and inspect HTTP requests. Everything stays on your device.</p></div>
+        <div class="headline-actions"><label class="collection-selector"><span>Save to</span><select [(ngModel)]="activeCollectionId" aria-label="Destination collection">@for(collection of workspace.collections;track collection.id){<option [ngValue]="collection.id">{{collection.name}}</option>}</select></label><button type="button" class="button outline" (click)="duplicateRequest()">Duplicate</button><button type="button" class="button outline" (click)="saveRequest()" title="Save request (Ctrl+S)"><svg class="ui-icon"><use href="assets/lucide.svg#save"></use></svg> Save request</button></div>
+      </div>
+
+      @if (warning) {<div class="alert warning"><span>!</span>{{warning}}<button type="button" (click)="warning=''" aria-label="Dismiss warning">×</button></div>}
+      @if (!isDesktop) {<div class="alert info"><span>i</span><span>Browser preview: cross-origin requests are subject to CORS. The desktop app sends requests through Tauri's native HTTP client.</span></div>}
+      @if (error) {<div class="alert error" role="alert"><span>!</span><span>{{error}}</span><button type="button" (click)="error=''" aria-label="Dismiss error">×</button></div>}
+
+      <section class="request-section card" aria-label="HTTP request">
+        <div class="request-bar">
+          <select class="method-picker" [(ngModel)]="draft.method" aria-label="HTTP method" [ngClass]="methodStyle(draft.method)">
+            @for (method of methods; track method){<option [value]="method">{{method}}</option>}
+          </select>
+          <input class="url-input" type="text" [(ngModel)]="draft.url" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Request URL" placeholder="https://api.example.com/v1/resource" (keydown.enter)="send()">
+          @if(running){<button type="button" class="send-button stop" (click)="cancelRequest()">Cancel <span aria-hidden="true">■</span></button>}
+          @else {<button type="button" class="send-button" (click)="send()">Send <svg class="ui-icon" aria-hidden="true"><use href="assets/lucide.svg#arrow-right"></use></svg></button>}
+        </div>
+        <div class="request-toolbar">
+          <div class="editor-tabs" role="tablist" aria-label="Request settings">
+            <button type="button" (click)="editorTab='params'" [class.active]="editorTab==='params'">Params <span>{{draft.params.length}}</span></button>
+            <button type="button" (click)="editorTab='headers'" [class.active]="editorTab==='headers'">Headers <span>{{draft.headers.length}}</span></button>
+            <button type="button" (click)="editorTab='body'" [class.active]="editorTab==='body'">Body</button>
+            <button type="button" (click)="editorTab='auth'" [class.active]="editorTab==='auth'">Authorization</button>
+          </div>
+          <span class="shortcut-hint">Ctrl + Enter to send</span>
+        </div>
+        <div class="editor-content">
+          @if(editorTab==='params' || editorTab==='headers') {
+            <div class="table-intro"><div><h3>{{editorTab==='params'?'Query parameters':'Request headers'}}</h3><p>{{editorTab==='params'?'Add key-value pairs to the URL.':'Set custom headers for this request.'}}</p></div><button class="add-row-button" (click)="createRow(editorTab==='params'?draft.params:draft.headers)">+ Add row</button></div>
+            <div class="kv-table">
+              <div class="kv-head"><span></span><span>KEY</span><span>VALUE</span><span></span></div>
+              @for(item of editorTab==='params'?draft.params:draft.headers;track item.id){
+                <div class="kv-row" [class.disabled]="!item.enabled">
+                  <label class="check-wrap"><input type="checkbox" [(ngModel)]="item.enabled" [attr.aria-label]="'Enable ' + item.key"></label>
+                  <input [(ngModel)]="item.key" placeholder="Key" autocomplete="off" aria-label="Parameter or header key">
+                  <input [(ngModel)]="item.value" placeholder="Value" autocomplete="off" aria-label="Parameter or header value">
+                  <button type="button" class="remove-row" (click)="removeRow(editorTab==='params'?draft.params:draft.headers,item.id)" aria-label="Remove row">×</button>
+                </div>
+              }
+            </div>
+            <p class="table-footnote">Use <code [textContent]="'{{baseUrl}}'"></code> syntax to reference environment variables in fields.</p>
+          }
+          @if(editorTab==='body') {
+            <div class="table-intro"><div><h3>Request body</h3><p>{{canHaveBody?'Choose a format and enter your payload.':'GET and HEAD requests do not send a body.'}}</p></div></div>
+            <div class="pill-options"><label><input type="radio" [(ngModel)]="draft.bodyMode" value="none" [disabled]="!canHaveBody">None</label><label><input type="radio" [(ngModel)]="draft.bodyMode" value="json" [disabled]="!canHaveBody">JSON</label><label><input type="radio" [(ngModel)]="draft.bodyMode" value="text" [disabled]="!canHaveBody">Text</label><label><input type="radio" [(ngModel)]="draft.bodyMode" value="urlencoded" [disabled]="!canHaveBody">URL encoded</label><label><input type="radio" [(ngModel)]="draft.bodyMode" value="formdata" [disabled]="!canHaveBody">Form data</label></div>
+            @if(draft.bodyMode==='formdata'&&canHaveBody){<div class="kv-table"><div class="kv-head"><span></span><span>KEY</span><span>VALUE</span><span></span></div>@for(item of draft.formData;track item.id){<div class="kv-row"><label class="check-wrap"><input type="checkbox" [(ngModel)]="item.enabled" aria-label="Enable form field"></label><input [(ngModel)]="item.key" placeholder="Field name" aria-label="Form field name"><input [(ngModel)]="item.value" placeholder="Text value" aria-label="Form field value"><button type="button" class="remove-row" (click)="removeRow(draft.formData,item.id)" aria-label="Remove form field">×</button></div>}</div><button type="button" class="add-row-button form-add" (click)="createRow(draft.formData)">+ Add form field</button><p class="help-note">Multipart text fields are supported. File attachments are not included in this version.</p>}
+            @else if(draft.bodyMode!=='none'&&canHaveBody){<div class="code-editor"><div class="code-editor-head"><span>{{draft.bodyMode==='json'?'JSON':draft.bodyMode==='text'?'Plain text':'a=1&b=2'}}</span><span>UTF-8</span></div><textarea [(ngModel)]="draft.body" rows="10" spellcheck="false" aria-label="Request body"></textarea></div>}
+            @else{<div class="no-body">No request body</div>}
+          }
+          @if(editorTab==='auth') {
+            <div class="table-intro"><div><h3>Authorization</h3><p>Use request-specific credentials or environment variables.</p></div></div>
+            <div class="auth-control"><label for="auth-mode">Auth type</label><select id="auth-mode" [(ngModel)]="draft.authMode"><option value="none">No Auth</option><option value="bearer">Bearer Token</option><option value="basic">Basic Auth</option></select></div>
+            @if(draft.authMode==='bearer'){<label class="auth-field"><span>Token</span><input [(ngModel)]="draft.bearerToken" type="password" autocomplete="off" [placeholder]="'{{token}}'" aria-label="Bearer token"></label><p class="help-note">Bearer tokens are stored locally if you save this request. Prefer environment variables for reusable credentials.</p>}
+            @if(draft.authMode==='basic'){<label class="auth-field"><span>Username</span><input [(ngModel)]="draft.basicUsername" autocomplete="off" aria-label="Basic auth username"></label><label class="auth-field"><span>Password</span><input type="password" [(ngModel)]="draft.basicPassword" autocomplete="off" aria-label="Basic auth password"></label>}
+            @if(draft.authMode==='none'){<div class="no-body">This request has no authorization.</div>}
+          }
+        </div>
+      </section>
+
+      <section class="response-section card" aria-label="HTTP response">
+        <div class="response-top">
+          <div class="response-title"><span class="response-signal" [class.active]="!!response"></span><h2>Response</h2></div>
+          <div class="response-metrics">
+            @if(response){<span class="metric status" [ngClass]="responseStatus()">{{response.status}} {{response.statusText}}</span><span class="metric"><span>Time</span><b>{{response.durationMs}} ms</b></span><span class="metric"><span>Size</span><b>{{bytes(response.sizeBytes)}}</b></span>}
+            @else{<span class="awaiting-label">Waiting for a request</span>}
+          </div>
+        </div>
+        <div class="response-tools"><div class="response-tabs"><button (click)="responseTab='body'" [class.active]="responseTab==='body'">Body</button><button (click)="responseTab='headers'" [class.active]="responseTab==='headers'">Headers @if(response){<span>{{response.headers.length}}</span>}</button></div><button type="button" class="copy-button" (click)="copyResponse()" [disabled]="!response"><svg class="ui-icon"><use href="assets/lucide.svg#copy"></use></svg> Copy</button></div>
+        @if(running){<div class="response-empty"><div class="pulse-mark"></div><h3>Sending request...</h3><p>Connecting to the server</p></div>}
+        @else if (response) {
+          @if(responseTab==='body') {<pre class="response-code" tabindex="0">{{response.body}}</pre>}
+          @else {<div class="response-headers">@for(header of response.headers;track header.id){<div><span>{{header.key}}</span><code>{{header.value}}</code></div>}</div>}
+        } @else {<div class="response-empty"><div class="response-empty-icon">&lt;/&gt;</div><h3>Ready when you are</h3><p>Send a request to see the response here.</p><span class="hint-chip">GET · POST · PUT · PATCH · DELETE</span></div>}
+      </section>
+      <footer class="status-footer"><span><span class="footer-indicator"></span>API Studio <span class="footer-divider">•</span> Local-first REST workspace</span><span>{{totalRequests}} saved requests <span class="footer-divider">•</span> {{workspace.history.length}} history entries</span></footer>
+    </div>
+  </main>
+</div>
+@if(showEnvironments){
+  <div class="modal-backdrop" (click)="showEnvironments=false">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="env-heading" (click)="$event.stopPropagation()">
+      <header class="modal-heading"><div><p class="kicker">WORKSPACE SETTINGS</p><h2 id="env-heading">Manage environments</h2><p>Variables are substituted locally before sending a request.</p></div><button type="button" class="modal-close" (click)="showEnvironments=false" aria-label="Close">×</button></header>
+      <div class="modal-body"><div class="modal-options"><label>Active environment<select [ngModel]="workspace.selectedEnvironmentId??''" (ngModelChange)="changeEnvironment($event)"><option value="">No environment</option>@for(env of workspace.environments;track env.id){<option [value]="env.id">{{env.name}}</option>}</select></label><button class="button outline" (click)="createEnvironment()">+ Add environment</button></div>
+        @if(activeEnvironment;as env){<div class="env-card"><div class="env-card-head"><label>Environment name<input [(ngModel)]="env.name" (ngModelChange)="persist()" aria-label="Environment name"></label><button type="button" class="danger-link" (click)="removeEnvironment(env.id)">Delete</button></div><div class="kv-table"><div class="kv-head"><span></span><span>VARIABLE</span><span>VALUE</span><span></span></div>@for(variable of env.variables;track variable.id){<div class="kv-row"><label class="check-wrap"><input type="checkbox" [(ngModel)]="variable.enabled" (ngModelChange)="persist()" aria-label="Enable variable"></label><input [(ngModel)]="variable.key" (ngModelChange)="persist()" placeholder="name" aria-label="Variable name"><input [(ngModel)]="variable.value" (ngModelChange)="persist()" placeholder="value" aria-label="Variable value"><button class="remove-row" (click)="removeRow(env.variables,variable.id);persist()" aria-label="Remove variable">×</button></div>}</div><button class="add-row-button" (click)="createRow(env.variables);persist()">+ Add variable</button></div>}
+        @else {<div class="no-body">Choose an environment or add one to start editing variables.</div>}
+        <div class="modal-warning">Variables are stored on this device in the app's local storage. Don't share workspace backups containing tokens or passwords.</div>
+      </div><footer class="modal-footer"><button class="button primary" (click)="persist();showEnvironments=false">Done</button></footer>
+    </section>
+  </div>
+}
+@if(notice){<div class="toast" role="status">{{notice}}</div>}

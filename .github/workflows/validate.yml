@@ -1,0 +1,85 @@
+name: CI - install, test, build and desktop packaging
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  web-build:
+    name: Fresh install, unit tests, Angular build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+      - name: Validate source encodings
+        run: python3 scripts/check_encoding.py
+      - name: Fresh dependency install
+        run: npm install --no-audit --no-fund
+      - name: Run unit tests
+        run: npm run test:core
+      - name: TypeScript typecheck
+        run: npm run typecheck
+      - name: Build Angular production app
+        run: npm run build
+      - name: Verify installed output exists
+        run: test -f dist/api-studio/browser/index.html && test -f dist/api-studio/browser/assets/lucide.svg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-studio-angular-build
+          path: dist/api-studio/browser/
+          retention-days: 7
+  browser-e2e:
+    name: Real HTTP E2E in Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+      - name: Fresh dependency install
+        run: npm install --no-audit --no-fund
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: Run Playwright with local API fixture
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-failures
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+  desktop-windows:
+    name: Fresh Windows desktop installer build
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Fresh dependency install
+        run: npm install --no-audit --no-fund
+      - name: Build real installer
+        run: npm run desktop:build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-studio-windows-installers
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 7
