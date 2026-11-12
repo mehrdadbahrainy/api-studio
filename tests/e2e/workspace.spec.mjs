@@ -12,7 +12,7 @@ async function requestResult(page) {
 test('fresh startup has a usable workspace without login or setup', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByText('Personal workspace')).toBeVisible();
-  await expect(page.getByText('Getting started', { exact: true })).toBeVisible();
+  await expect(page.locator('.collection-title .truncate').filter({ hasText: 'Getting started' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Request URL' })).toHaveValue(/jsonplaceholder/);
   await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
   await expect(page.getByText('Browser preview')).toBeVisible();

@@ -7,6 +7,7 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
+  res.setHeader('Access-Control-Expose-Headers', 'X-Test-Server');
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
