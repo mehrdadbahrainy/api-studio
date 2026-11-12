@@ -15,7 +15,7 @@ test('fresh startup has a usable workspace without login or setup', async ({ pag
   await expect(page.locator('.collection-title .truncate').filter({ hasText: 'Getting started' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Request URL' })).toHaveValue(/jsonplaceholder/);
   await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
-  await expect(page.getByText('Browser preview')).toBeVisible();
+  await expect(page.locator('.sidebar-signal')).toContainText('Browser preview');
 });
 
 test('GET sends to a real local HTTP service and displays status, headers, body and history', async ({ page }) => {
