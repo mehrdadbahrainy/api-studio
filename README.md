@@ -21,9 +21,9 @@ A lightweight, local-first REST client built with **Angular 21** and **Tauri 2**
 
 ## Download and use
 
-When this repository has a GitHub Release, open **Releases** and download the installer for your operating system. Install and launch API Studio. There is no backend to configure, and no sign-in step. The installers are built by the included release workflow on a `v*` Git tag.
+**Download the published [v0.1.0 preview release](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.0).** Windows users can download the [EXE installer](https://github.com/mehrdadbahrainy/api-studio/releases/download/v0.1.0/API.Studio_0.1.0_x64-setup.exe) or [MSI installer](https://github.com/mehrdadbahrainy/api-studio/releases/download/v0.1.0/API.Studio_0.1.0_x64_en-US.msi). [SHA-256 checksums](https://github.com/mehrdadbahrainy/api-studio/releases/download/v0.1.0/SHA256SUMS.txt) are provided for integrity verification. These **Release assets do not expire** like temporary GitHub Actions artifacts.
 
-> **Current artifact**: the source ZIP contains the full application, not a prebuilt Windows/macOS/Linux installer. To use the app before its first release, build it using the steps below.
+This preview is **unsigned**, so Windows may warn about an unverified publisher. Automated tests and installer packaging passed, but interactive installation on a physical Windows machine is not yet independently verified. There is no backend to configure and no sign-in step. Linux and macOS users can build from source using the instructions below.
 
 ### Requirements for development
 
