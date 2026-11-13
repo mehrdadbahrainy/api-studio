@@ -1,0 +1,86 @@
+name: Publish API Studio v0.1.0 release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v0.1.0.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    name: Publish verified Windows installers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download Windows installers from successful CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 43317114156 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name api-studio-windows-installers \
+            --dir installers
+
+      - name: Validate and prepare release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          mapfile -d '' -t MSI_FILES < <(find installers -type f -iname '*.msi' -print0)
+          mapfile -d '' -t EXE_FILES < <(find installers -type f -iname '*.exe' -print0)
+          if (( ${#MSI_FILES[@]} == 0 || ${#EXE_FILES[@]} == 0 )); then
+            echo "::error::Both MSI and EXE installers must be present"
+            exit 1
+          fi
+          for file in "${MSI_FILES[@]}" "${EXE_FILES[@]}"; do
+            cp "$file" "release-assets/$(basename "$file")"
+          done
+          (cd release-assets && sha256sum -- *.msi *.exe > SHA256SUMS.txt)
+          ls -lh release-assets/
+
+      - name: Create public prerelease with permanent assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > RELEASE_NOTES.md <<'NOTES'
+          ## API Studio v0.1.0 (Preview)
+
+          A lightweight local-first REST API client built with Angular and Tauri.
+
+          ### Windows downloads
+          - **.exe**: NSIS installer for Windows.
+          - **.msi**: Windows Installer package.
+          - **SHA256SUMS.txt**: checksums to verify downloads.
+
+          The application does not require registration or an API Studio backend.
+
+          ### Quality checks
+          The CI run that produced these installers completed successfully, including Angular production build, unit tests and browser E2E tests. Windows installer packaging completed successfully.
+
+          ### Important notes
+          - This is an **unsigned preview**. Windows SmartScreen may warn about an unknown publisher.
+          - Automated packaging succeeded, but interactive installation and runtime behavior on a real Windows desktop have **not yet been independently verified**.
+          - Do not store production secrets: saved environment data is not encrypted.
+          - Browser-only previews remain subject to CORS; the desktop HTTP client is not.
+
+          Source code and build instructions are available in this repository.
+          NOTES
+
+          if gh release view v0.1.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload v0.1.0 release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create v0.1.0 release-assets/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "API Studio v0.1.0 (Preview)" \
+              --notes-file RELEASE_NOTES.md \
+              --prerelease
+          fi
