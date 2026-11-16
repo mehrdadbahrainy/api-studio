@@ -83,3 +83,36 @@ jobs:
             src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
           retention-days: 7
+
+  desktop-install-smoke:
+    name: Download MSI artifact and test install/uninstall
+    needs: desktop-windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: api-studio-windows-installers
+          path: downloaded-installers
+      - name: Verify installation and removal on a clean runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = Get-ChildItem -Path downloaded-installers -Filter '*.msi' -File -Recurse | Select-Object -First 1
+          if (-not $msi) { throw 'Downloaded artifact does not contain an MSI installer' }
+          $log = Join-Path $env:RUNNER_TEMP 'api-studio-msi.log'
+          $args = "/i `"$($msi.FullName)`" /qn /norestart /l*v `"$log`""
+          $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $args -PassThru -Wait
+          if ($process.ExitCode -notin @(0,3010)) {
+            Get-Content $log -Tail 100
+            throw "MSI installation failed: $($process.ExitCode)"
+          }
+          $keys = @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+                    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+                    'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')
+          $installed = Get-ItemProperty -Path $keys -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like '*API Studio*' } | Select-Object -First 1
+          if (-not $installed) { throw 'MSI succeeded, but API Studio registration was not found' }
+          Write-Host "Installed: $($installed.DisplayName)"
+          $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/x `"$($msi.FullName)`" /qn /norestart" -PassThru -Wait
+          if ($process.ExitCode -notin @(0,3010)) { throw "MSI uninstall failed: $($process.ExitCode)" }
