@@ -1,15 +1,15 @@
-use tauri::Manager;
+// TEMPORARY DIAGNOSTIC: not safe to release. Confirms whether initialization
+// of the Stronghold plugin (not Argon2) triggers the Windows 2025 crash.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_http::init())
         .setup(|app| {
-            // Argon2 uses a per-installation salt, never a hardcoded encryption key.
-            let data_dir = app.path().app_local_data_dir()?;
-            std::fs::create_dir_all(&data_dir)?;
+            eprintln!("DIAG: before Stronghold plugin registration");
             app.handle().plugin(
-                tauri_plugin_stronghold::Builder::with_argon2(&data_dir.join("salt.txt")).build()
+                tauri_plugin_stronghold::Builder::new(|_| vec![0_u8; 32]).build()
             )?;
+            eprintln!("DIAG: after Stronghold plugin registration");
             Ok(())
         })
         .run(tauri::generate_context!())
