@@ -141,7 +141,9 @@ pub fn write_protected_workspace(app: tauri::AppHandle, payload: String) -> Resu
 #[tauri::command]
 pub fn remove_protected_workspace(app: tauri::AppHandle) -> Result<(), String> {
     let (primary, backup, _) = paths(&app)?;
-    for file in [primary, backup] {
+    // Delete the stale backup first. If clearing the current file then fails,
+    // the current protected workspace is still available on the next launch.
+    for file in [backup, primary] {
         if file.exists() {
             fs::remove_file(file).map_err(|_| "Could not clear previous passwordless workspace.")?;
         }
