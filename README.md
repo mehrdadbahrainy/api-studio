@@ -21,9 +21,9 @@ A lightweight, local-first REST client built with **Angular 21** and **Tauri 2**
 
 ## Download and use
 
-**Download the published [v0.1.0 preview release](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.0).** Windows users can download the [EXE installer](https://github.com/mehrdadbahrainy/api-studio/releases/download/v0.1.0/API.Studio_0.1.0_x64-setup.exe) or [MSI installer](https://github.com/mehrdadbahrainy/api-studio/releases/download/v0.1.0/API.Studio_0.1.0_x64_en-US.msi). [SHA-256 checksums](https://github.com/mehrdadbahrainy/api-studio/releases/download/v0.1.0/SHA256SUMS.txt) are provided for integrity verification. These **Release assets do not expire** like temporary GitHub Actions artifacts.
+**Latest preview:** [API Studio v0.1.1](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.1) (Windows x64 EXE and MSI installers, SHA-256 checksums). Previous version: [v0.1.0](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.0). Release assets do not have the short retention window of GitHub Actions artifacts. First-time users of desktop v0.1.1 must create and remember a workspace passphrase (minimum 12 characters); existing v0.1.0 users should export a private backup before updating.
 
-This preview is **unsigned**, so Windows may warn about an unverified publisher. Automated tests and installer packaging passed, but interactive installation on a physical Windows machine is not yet independently verified. There is no backend to configure and no sign-in step. Linux and macOS users can build from source using the instructions below.
+These preview installers are **unsigned**, so Windows may warn about an unverified publisher. Automated tests, installer packaging and MSI installation/removal checks run in GitHub Actions; unlocking the encrypted desktop vault and its migration flow have not been independently tested through a real user-driven Windows UI session. There is no backend to configure and no sign-in step. Linux and macOS users can build from source using the instructions below.
 
 ### Requirements for development
 
@@ -111,26 +111,19 @@ Angular UI (request editor, collections, history)
 
 ## Release workflow
 
-The `.github/workflows/release.yml` workflow builds native installers on Windows, Linux and macOS from a tag such as `v0.1.0`. It creates a **draft** GitHub release so you can review the artifacts and publish them when verified.
+The CI workflow runs unit tests, browser E2E, Angular build, Windows desktop packaging and clean Windows MSI installation/removal checks. The `.github/workflows/publish-v0.1.1.yml` workflow publishes a **public prerelease** from a fresh verified build on the merged main branch, with downloadable Windows installers and a SHA-256 checksum file. It can also be run manually through GitHub Actions.
 
-```bash
-git tag v0.1.0
-git push origin main --tags
-```
+For future version tags, the `.github/workflows/release.yml` workflow creates a draft cross-platform release for review.
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
 
-## v0.1.1 development status (not released)
+## v0.1.1 notes
 
-Version **v0.1.0** remains the public installer. Version **v0.1.1** is in a development pull request pending CI verification and manual desktop acceptance testing.
-
-Changes under review:
-- Password-protected encrypted desktop workspace (Tauri Stronghold + Argon2) with safe migration from v0.1.0.
-- Privacy-focused History with empty request bodies and URL query values; saved collections remain intact.
-- 30-second request timeout, cancellation and actionable network errors without exposing transport exception contents.
-- In-app manual GitHub update check.
-- Extra unit/E2E tests and downloading/installing/uninstalling a Windows MSI in CI.
-
-**Before upgrading:** export a private backup of your v0.1.0 workspace, and keep the new vault passphrase safe. Losing the passphrase means losing access to the encrypted data. No GUI acceptance test on an actual user's Windows machine is claimed at this stage.
+- Desktop Stronghold vault encrypts saved workspace and environment values with a user-chosen passphrase; browser preview does not use this vault.
+- Legacy workspace migration only removes the unencrypted storage entry after an encrypted save has succeeded. Export a private backup of v0.1.0 data before updating.
+- History removes request bodies, query values, credentials and sensitive headers. Replaying sanitized entries may require re-entering parameters.
+- Requests support cancellation, a 30-second timeout and safer network error messages.
+- Manual update checks compare installed version with public releases; the application does not auto-install updates.
+- **Verification limit:** CI tests packaging, browser E2E and MSI install/uninstall. A user-driven desktop UI test of Stronghold unlock and migration is still recommended. This is an unsigned preview release.
