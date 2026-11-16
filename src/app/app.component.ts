@@ -101,7 +101,7 @@ export class AppComponent implements OnDestroy {
     this.vaultError='';this.vaultWorking=true;
     try {
       const opened=await SecureWorkspace.unlock(this.vaultPassphrase);
-      if(await SystemWorkspace.supported()) {
+      if(await SystemWorkspace.supported() && !await invoke<boolean>('password_mode_enabled')) {
         // Migration is additive and verified. The v0.1.2 encrypted file remains
         // untouched as a private recovery snapshot; Windows-protected storage
         // becomes canonical on the next launch.
@@ -124,6 +124,8 @@ export class AppComponent implements OnDestroy {
       await invoke('remove_protected_workspace');
       this.secureWorkspace=vault;
       this.vaultMode='password';
+      await invoke('set_password_mode',{enabled:true});
+      this.vaultMode='password';
       this.newVaultPassphrase='';
       this.showSecurityDialog=false;
       this.inform('Passphrase protection enabled. It will be required at the next start.');
@@ -135,6 +137,9 @@ export class AppComponent implements OnDestroy {
     this.securityError='';this.securityWorking=true;
     try {
       if(!await SystemWorkspace.supported())throw new Error('Windows protection unavailable.');
+      // Disarm the opt-in marker before writing the passwordless copy. If
+      // Windows storage fails, the encrypted vault remains safe for retry.
+      await invoke('set_password_mode',{enabled:false});
       const vault=await SystemWorkspace.create(this.workspace);
       this.secureWorkspace=vault;
       this.vaultMode='system';
