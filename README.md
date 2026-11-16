@@ -2,7 +2,7 @@
 
 A lightweight, local-first REST client built with **Angular 21** and **Tauri 2**.
 
-**No account, sync server or API key is needed to use the app itself.** Work with HTTP requests and keep your collections, environments and history on your own machine. **Desktop v0.1.2 uses a password-protected Stronghold vault; browser preview still uses unencrypted localStorage.**
+**No account, sync server or API key is needed to use the app itself.** Work with HTTP requests and keep your collections, environments and history on your own machine. **Desktop v0.1.2 uses a password-protected encrypted Web Crypto vault; browser preview still uses unencrypted localStorage.**
 
 ## Features
 
@@ -100,7 +100,7 @@ Angular UI (request editor, collections, history)
 
 ### Security and limitations
 
-- **Secrets (desktop v0.1.1)**: saved requests, tokens and environment values use an encrypted Stronghold workspace protected by a user-chosen passphrase (Argon2). No passphrase recovery is provided. On the first successful unlock, the unencrypted v0.1.0 data is migrated and only then removed. Browser preview remains unencrypted. JSON exports may contain credentials and must be kept private.
+- **Secrets (desktop v0.1.1)**: saved requests, tokens and environment values use an encrypted Web Crypto workspace protected by a user-chosen passphrase (PBKDF2-SHA256). No passphrase recovery is provided. On the first successful unlock, the unencrypted v0.1.0 data is migrated and only then removed. Browser preview remains unencrypted. JSON exports may contain credentials and must be kept private.
 - **History**: no body content, URL query values, form values, credentials or sensitive headers are retained. Legacy history is sanitized on import/migration. Replaying exact requests from history requires re-entering stripped data.
 - **HTTP**: sending credentials to an `http://` URL is unencrypted. Use HTTPS for sensitive APIs.
 - **Untrusted APIs**: desktop requests can reach arbitrary HTTP(S) addresses, including local services, by design. Only send requests to endpoints you trust. Imported workspaces do not execute automatically.
@@ -121,7 +121,7 @@ MIT. See [LICENSE](LICENSE).
 
 ## v0.1.1 notes
 
-- Desktop Stronghold vault encrypts saved workspace and environment values with a user-chosen passphrase; browser preview does not use this vault.
+- Desktop encrypted Web Crypto vault encrypts saved workspace and environment values with a user-chosen passphrase; browser preview does not use this vault.
 - Legacy workspace migration only removes the unencrypted storage entry after an encrypted save has succeeded. Export a private backup of v0.1.0 data before updating.
 - History removes request bodies, query values, credentials and sensitive headers. Replaying sanitized entries may require re-entering parameters.
 - Requests support cancellation, a 30-second timeout and safer network error messages.
@@ -131,7 +131,11 @@ MIT. See [LICENSE](LICENSE).
 ## v0.1.2 reliability update
 
 - A previous preview was reported not to work on a user's Windows machine; the exact user-side failure has not yet been reproduced.
-- Vault migration now reopens the encrypted Stronghold snapshot before removing legacy v0.1.0 data. Failures preserve the old data.
+- Vault migration now reopens the encrypted record before removing legacy v0.1.0 data. Failures preserve the old data.
 - Safer diagnostic messages for wrong passphrases and filesystem errors.
 - Saved-request success feedback now waits for encrypted persistence to finish.
 - Additional desktop IPC integration tests and a native Windows launch smoke check are release gates; a successful build alone does not establish bug-free behavior.
+
+## v0.1.2 storage migration warning
+
+The v0.1.1 release has a confirmed Windows startup crash in native validation. The v0.1.2 Windows build removes the native Stronghold plugin and uses PBKDF2-SHA256 (600,000 iterations) and AES-256-GCM with random salts and IVs for its encrypted desktop workspace, stored as ciphertext in the WebView's local storage. Plaintext v0.1.0 workspaces migrate only after verifying decryption of the persisted ciphertext. **v0.1.1 Stronghold snapshots are preserved but cannot be automatically imported into v0.1.2.** Export a private JSON backup from a functioning v0.1.1 before migrating, if applicable. If the old preview crashes, keep its existing AppData folder intact for future recovery. Do not delete that folder. Browser preview continues to store plaintext and should not be used for credentials.

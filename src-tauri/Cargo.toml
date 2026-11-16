@@ -16,7 +16,6 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
-tauri-plugin-stronghold = "2"
 
 [profile.dev.package.scrypt]
 opt-level = 3

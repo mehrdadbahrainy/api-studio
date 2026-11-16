@@ -1,131 +1,80 @@
-import { expect, test } from '@playwright/test';
-
-/**
- * These browser tests exercise the *desktop IPC contract* using a deterministic
- * Stronghold adapter. Native Windows startup is tested separately in CI.
- * Do not interpret these as native cryptographic tests.
- */
-async function emulateDesktop(page) {
-  await page.addInitScript(() => {
-    const DISK = 'api-studio.test.snapshot';
-    const FAIL = 'api-studio.test.fail-save';
-    let active = null;
-    const disk = () => {
-      const serialized = localStorage.getItem(DISK);
-      return serialized ? JSON.parse(serialized) : null;
-    };
-    const save = () => {
-      if (localStorage.getItem(FAIL) === '1') throw new Error('disk full (simulated)');
-      localStorage.setItem(DISK, JSON.stringify(active));
-    };
-    // Tauri 2's isTauri() probes window.isTauri, not just __TAURI_INTERNALS__.
-    window.isTauri = true;
-    window.__TAURI_INTERNALS__ = {
-      invoke: async (command, args = {}) => {
-        if (command === 'plugin:path|resolve_directory') return 'C:/test/api-studio';
-        if (command === 'plugin:stronghold|initialize') {
-          if (!active) active = disk() || { password: args.password, client: false, records: {} };
-          if (active.password !== args.password) throw new Error('incorrect password');
-          return null;
-        }
-        if (command === 'plugin:stronghold|load_client') {
-          if (!active?.client) throw new Error('client not found');
-          return null;
-        }
-        if (command === 'plugin:stronghold|create_client') {
-          active.client = true;
-          return null;
-        }
-        if (command === 'plugin:stronghold|get_store_record') {
-          return active.records[args.key] ?? null;
-        }
-        if (command === 'plugin:stronghold|save_store_record') {
-          active.records[args.key] = args.value;
-          return null;
-        }
-        if (command === 'plugin:stronghold|save') {
-          save();
-          return null;
-        }
-        if (command === 'plugin:stronghold|destroy') {
-          save();
-          active = null;
-          return null;
-        }
-        if (command === 'plugin:app|version') return '0.1.2';
-        throw new Error('Unsupported mock IPC call: ' + command);
-      }
+import {expect,test} from '@playwright/test';
+const LEGACY='api-studio.workspace.v1';
+const VAULT='api-studio.encrypted-workspace.v2';
+const PASSWORD='test-vault-password-123';
+async function desktop(page) {
+  await page.addInitScript(()=>{
+    window.isTauri=true;
+    window.__TAURI_INTERNALS__={invoke:async cmd=>{
+      if(cmd==='plugin:app|version')return '0.1.2';
+      throw new Error('Unexpected IPC call '+cmd);
+    }};
+    const original=Storage.prototype.setItem;
+    Storage.prototype.setItem=function(key,value) {
+      if(key==='api-studio.encrypted-workspace.v2' &&
+        Storage.prototype.getItem.call(this,'test.fail-vault')==='1')
+        throw new DOMException('Quota exceeded','QuotaExceededError');
+      return original.call(this,key,value);
     };
   });
 }
-
-async function unlock(page, password = 'test-vault-password-123') {
-  await page.locator('#vault-passphrase').fill(password);
-  await page.getByRole('button', { name: 'Unlock / create encrypted vault' }).click();
-  await expect(page.getByRole('heading', { name: 'Unlock API Studio' })).toBeHidden();
+async function unlock(page,pass=PASSWORD) {
+  await page.locator('#vault-passphrase').fill(pass);
+  await page.getByRole('button',{name:'Unlock / create encrypted vault'}).click();
+  await expect(page.getByRole('heading',{name:'Unlock API Studio'})).toBeHidden();
 }
-
-test('desktop IPC: initial unlock, save request and reopen persistent snapshot', async ({ page }) => {
-  await emulateDesktop(page);
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Unlock API Studio' })).toBeVisible();
+test('desktop Web Crypto: save encrypted data and reopen after restart',async({page})=>{
+  await desktop(page);await page.goto('/');
+  await expect(page.getByRole('heading',{name:'Unlock API Studio'})).toBeVisible();
   await unlock(page);
-  await page.getByRole('textbox', { name: 'Request name' }).fill('Encrypted request saved');
-  await page.getByRole('button', { name: /Save request/ }).click();
+  await page.getByRole('textbox',{name:'Request name'}).fill('Encrypted secret project');
+  await page.getByRole('button',{name:/Save request/}).click();
   await expect(page.locator('.toast')).toContainText('Request saved');
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('api-studio.test.snapshot'))).not.toBeNull();
-  expect(await page.evaluate(() => localStorage.getItem('api-studio.workspace.v1'))).toBeNull();
-  await page.reload();
-  await unlock(page);
-  await expect(page.getByRole('textbox', { name: 'Request name' })).toHaveValue('Encrypted request saved');
+  const ciphertext=await page.evaluate(k=>localStorage.getItem(k),VAULT);
+  expect(ciphertext).toContain('"ciphertext"');
+  expect(ciphertext).not.toContain('Encrypted secret project');
+  expect(await page.evaluate(k=>localStorage.getItem(k),LEGACY)).toBeNull();
+  await page.reload();await unlock(page);
+  await expect(page.getByRole('textbox',{name:'Request name'})).toHaveValue('Encrypted secret project');
 });
-
-test('desktop IPC: legacy browser workspace migrates only after verification', async ({ page }) => {
+test('desktop Web Crypto: v0.1.0 plaintext migrates only after ciphertext verification',async({page})=>{
   await page.goto('/');
-  await page.getByRole('textbox', { name: 'Request name' }).fill('Legacy migrated request');
-  await page.getByRole('button', { name: /Save request/ }).click();
+  await page.getByRole('textbox',{name:'Request name'}).fill('Legacy request retained');
+  await page.getByRole('button',{name:/Save request/}).click();
   await expect(page.locator('.toast')).toContainText('Request saved');
-  const legacy = await page.evaluate(() => localStorage.getItem('api-studio.workspace.v1'));
-  expect(legacy).toContain('Legacy migrated request');
-  await emulateDesktop(page);
-  await page.reload();
-  await unlock(page);
-  await expect(page.getByRole('textbox', { name: 'Request name' })).toHaveValue('Legacy migrated request');
-  expect(await page.evaluate(() => localStorage.getItem('api-studio.workspace.v1'))).toBeNull();
-  await page.reload();
-  await unlock(page);
-  await expect(page.getByRole('textbox', { name: 'Request name' })).toHaveValue('Legacy migrated request');
+  expect(await page.evaluate(k=>localStorage.getItem(k),LEGACY)).toContain('Legacy request retained');
+  await desktop(page);await page.reload();await unlock(page);
+  expect(await page.evaluate(k=>localStorage.getItem(k),LEGACY)).toBeNull();
+  await expect(page.getByRole('textbox',{name:'Request name'})).toHaveValue('Legacy request retained');
+  await page.reload();await unlock(page);
+  await expect(page.getByRole('textbox',{name:'Request name'})).toHaveValue('Legacy request retained');
 });
-
-test('desktop IPC: failed disk save keeps legacy data and permits safe retry', async ({ page }) => {
+test('desktop Web Crypto: storage failure leaves legacy plaintext untouched',async({page})=>{
   await page.goto('/');
-  await page.getByRole('textbox', { name: 'Request name' }).fill('Do not lose this workspace');
-  await page.getByRole('button', { name: /Save request/ }).click();
+  await page.getByRole('textbox',{name:'Request name'}).fill('Retain me if disk full');
+  await page.getByRole('button',{name:/Save request/}).click();
   await expect(page.locator('.toast')).toContainText('Request saved');
-  await page.evaluate(() => localStorage.setItem('api-studio.test.fail-save', '1'));
-  await emulateDesktop(page);
-  await page.reload();
-  await page.locator('#vault-passphrase').fill('test-vault-password-123');
-  await page.getByRole('button', { name: 'Unlock / create encrypted vault' }).click();
-  await expect(page.getByRole('alert')).toContainText(/disk is full/i);
-  expect(await page.evaluate(() => localStorage.getItem('api-studio.workspace.v1'))).toContain('Do not lose this workspace');
-  await page.evaluate(() => localStorage.removeItem('api-studio.test.fail-save'));
+  await page.evaluate(()=>localStorage.setItem('test.fail-vault','1'));
+  await desktop(page);await page.reload();
+  await page.locator('#vault-passphrase').fill(PASSWORD);
+  await page.getByRole('button',{name:'Unlock / create encrypted vault'}).click();
+  await expect(page.getByRole('alert')).toContainText(/storage is full/i);
+  expect(await page.evaluate(k=>localStorage.getItem(k),LEGACY)).toContain('Retain me if disk full');
+  await page.evaluate(()=>localStorage.removeItem('test.fail-vault'));
   await unlock(page);
-  await expect(page.getByRole('textbox', { name: 'Request name' })).toHaveValue('Do not lose this workspace');
-  expect(await page.evaluate(() => localStorage.getItem('api-studio.workspace.v1'))).toBeNull();
+  expect(await page.evaluate(k=>localStorage.getItem(k),LEGACY)).toBeNull();
 });
-
-test('desktop IPC: wrong passphrase does not destroy saved data', async ({ page }) => {
-  await emulateDesktop(page);
-  await page.goto('/');
-  await unlock(page);
-  await page.getByRole('textbox', { name: 'Request name' }).fill('Keep encrypted data');
-  await page.getByRole('button', { name: /Save request/ }).click();
+test('desktop Web Crypto: wrong password preserves encrypted workspace',async({page})=>{
+  await desktop(page);await page.goto('/');await unlock(page);
+  await page.getByRole('textbox',{name:'Request name'}).fill('Wrong password should not erase');
+  await page.getByRole('button',{name:/Save request/}).click();
   await expect(page.locator('.toast')).toContainText('Request saved');
+  const before=await page.evaluate(k=>localStorage.getItem(k),VAULT);
   await page.reload();
-  await page.locator('#vault-passphrase').fill('incorrect-passphrase-123');
-  await page.getByRole('button', { name: 'Unlock / create encrypted vault' }).click();
-  await expect(page.getByRole('alert')).toContainText(/passphrase was rejected/i);
+  await page.locator('#vault-passphrase').fill('wrong-password-12345');
+  await page.getByRole('button',{name:'Unlock / create encrypted vault'}).click();
+  await expect(page.getByRole('alert')).toContainText(/passphrase is incorrect/i);
+  expect(await page.evaluate(k=>localStorage.getItem(k),VAULT)).toBe(before);
   await unlock(page);
-  await expect(page.getByRole('textbox', { name: 'Request name' })).toHaveValue('Keep encrypted data');
+  await expect(page.getByRole('textbox',{name:'Request name'})).toHaveValue('Wrong password should not erase');
 });
