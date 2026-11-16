@@ -98,16 +98,21 @@ export class AppComponent implements OnDestroy {
   trackId(_index:number,item:{id:string}):string{return item.id;}
   closePopup():void{this.showMenu=false;}
   inform(text:string):void {this.notice=text;if(this.notificationTimer)clearTimeout(this.notificationTimer);this.notificationTimer=setTimeout(()=>this.notice='',2800);}
-  persist():void {
+  async persist():Promise<boolean> {
     if (this.isDesktop) {
-      if (this.vaultLocked || !this.secureWorkspace) return;
-      void this.secureWorkspace.save(this.workspace).catch(() => {
-        this.warning='Encrypted workspace save failed. Export a backup before closing the app.';
-      });
-    } else {
-      const err=saveWorkspace(this.workspace);
-      if(err)this.warning=err;
+      if (this.vaultLocked || !this.secureWorkspace) return false;
+      try {
+        await this.secureWorkspace.save(this.workspace);
+        this.warning='';
+        return true;
+      } catch {
+        this.warning='Encrypted workspace save failed. Your latest changes may not be stored. Export a private backup before closing.';
+        return false;
+      }
     }
+    const err=saveWorkspace(this.workspace);
+    if(err)this.warning=err;
+    return !err;
   }
   newRequest():void {this.draft=freshRequest();this.activeRequestId=null;this.activeCollectionId=this.workspace.collections[0]?.id??null;this.response=null;this.error='';this.editorTab='params';this.showMenu=false;}
   selectRequest(item:RequestDraft):void {this.draft=copyRequest(item);this.activeRequestId=item.id;this.activeCollectionId=item.collectionId;this.response=null;this.error='';this.sidebarTab='collections';this.closePopup();}
@@ -123,7 +128,7 @@ export class AppComponent implements OnDestroy {
     if(this.activeCollectionId===collection.id){this.newRequest();}
     this.persist();this.inform('Collection removed');
   }
-  saveRequest():void {
+  async saveRequest():Promise<void> {
     if(!this.draft.url.trim()){this.error='Enter a request URL before saving.';return;}
     const destination=this.workspace.collections.find(c=>c.id===this.activeCollectionId)??this.workspace.collections[0];
     if(!destination){this.showCreateCollection=true;this.inform('Create a collection before saving.');return;}
@@ -135,7 +140,8 @@ export class AppComponent implements OnDestroy {
     }else copy.id=makeId();
     destination.requests.push(copy);this.draft=copyRequest(copy);
     this.activeRequestId=copy.id;this.activeCollectionId=destination.id;
-    this.persist();this.error='';this.inform('Request saved');
+    if (!(await this.persist())) { this.error='Could not save the request. Check the workspace warning and retry.'; return; }
+    this.error='';this.inform('Request saved');
   }
   duplicateRequest():void {this.draft=copyRequest(this.draft);this.draft.id=makeId();this.draft.name=`${this.draft.name} copy`;this.activeRequestId=null;this.response=null;this.inform('Save this copy to a collection');}
   deleteRequest():void {
