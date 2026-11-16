@@ -114,5 +114,35 @@ jobs:
             Where-Object { $_.DisplayName -like '*API Studio*' } | Select-Object -First 1
           if (-not $installed) { throw 'MSI succeeded, but API Studio registration was not found' }
           Write-Host "Installed: $($installed.DisplayName)"
+          # A successful MSI return code is not proof that the installed GUI can start.
+          $installDirs = @()
+          if ($installed.InstallLocation) { $installDirs += $installed.InstallLocation }
+          $installDirs += (Join-Path $env:ProgramFiles 'API Studio')
+          if (${env:ProgramFiles(x86)}) { $installDirs += (Join-Path ${env:ProgramFiles(x86)} 'API Studio') }
+          $binary = $null
+          foreach ($directory in $installDirs | Select-Object -Unique) {
+            if (Test-Path $directory) {
+              $binary = Get-ChildItem $directory -Filter '*.exe' -File -Recurse -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -notmatch 'uninstall|setup|updater' } | Select-Object -First 1
+              if ($binary) { break }
+            }
+          }
+          if (-not $binary) { throw 'Installed API Studio executable was not found' }
+          Write-Host "Launching installed binary: $($binary.FullName)"
+          $desktop = Start-Process -FilePath $binary.FullName -PassThru
+          try {
+            $windowFound = $false
+            for ($attempt = 0; $attempt -lt 20; $attempt++) {
+              Start-Sleep -Seconds 1
+              $desktop.Refresh()
+              if ($desktop.HasExited) { throw "Installed desktop process exited early with code $($desktop.ExitCode)" }
+              if ($desktop.MainWindowHandle -ne 0) { $windowFound = $true; break }
+            }
+            if (-not $windowFound) { throw 'Installed desktop process has no visible main window after 20 seconds' }
+            Write-Host "Native desktop window opened (handle $($desktop.MainWindowHandle))"
+          }
+          finally {
+            if (-not $desktop.HasExited) { Stop-Process -Id $desktop.Id -Force -ErrorAction SilentlyContinue }
+          }
           $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/x `"$($msi.FullName)`" /qn /norestart" -PassThru -Wait
           if ($process.ExitCode -notin @(0,3010)) { throw "MSI uninstall failed: $($process.ExitCode)" }
