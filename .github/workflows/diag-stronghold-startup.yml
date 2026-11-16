@@ -1,0 +1,30 @@
+name: Diagnostic Stronghold native startup
+on:
+  push:
+    branches: [fix/native-vault-startup]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-startup:
+    runs-on: windows-2025
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm install --no-audit --no-fund
+      - run: npm run desktop:build
+      - name: Verify actual desktop process survival
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe=(Resolve-Path 'src-tauri/target/release/api_studio.exe').Path
+          $p=Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 12
+          $p.Refresh()
+          if ($p.HasExited) { throw "Startup crashed (signed=$($p.ExitCode); hex=0x$([Convert]::ToString($p.ExitCode,16)))" }
+          Write-Host 'PASS: native desktop process still running on Windows 2025'
+          Stop-Process -Id $p.Id -Force
