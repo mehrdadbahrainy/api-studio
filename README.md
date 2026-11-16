@@ -2,7 +2,7 @@
 
 A lightweight, local-first REST client built with **Angular 21** and **Tauri 2**.
 
-**No account, sync server or API key is needed to use the app itself.** Work with HTTP requests and keep your collections, environments and history on your own machine. **Desktop v0.1.1 uses a password-protected Stronghold vault; browser preview still uses unencrypted localStorage.**
+**No account, sync server or API key is needed to use the app itself.** Work with HTTP requests and keep your collections, environments and history on your own machine. **Desktop v0.1.2 uses a password-protected Stronghold vault; browser preview still uses unencrypted localStorage.**
 
 ## Features
 
@@ -21,7 +21,7 @@ A lightweight, local-first REST client built with **Angular 21** and **Tauri 2**
 
 ## Download and use
 
-**Latest preview:** [API Studio v0.1.1](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.1) (Windows x64 EXE and MSI installers, SHA-256 checksums). Previous version: [v0.1.0](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.0). Release assets do not have the short retention window of GitHub Actions artifacts. First-time users of desktop v0.1.1 must create and remember a workspace passphrase (minimum 12 characters); existing v0.1.0 users should export a private backup before updating.
+**Latest stable candidate:** [API Studio v0.1.2](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.2) (Windows x64 EXE and MSI installers, SHA-256 checksums). Previous previews: [v0.1.1](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.1), [v0.1.0](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.0). Release assets do not have the short retention window of GitHub Actions artifacts. First-time users of desktop v0.1.1 must create and remember a workspace passphrase (minimum 12 characters); existing v0.1.0 users should export a private backup before updating.
 
 These preview installers are **unsigned**, so Windows may warn about an unverified publisher. Automated tests, installer packaging and MSI installation/removal checks run in GitHub Actions; unlocking the encrypted desktop vault and its migration flow have not been independently tested through a real user-driven Windows UI session. There is no backend to configure and no sign-in step. Linux and macOS users can build from source using the instructions below.
 
@@ -127,3 +127,11 @@ MIT. See [LICENSE](LICENSE).
 - Requests support cancellation, a 30-second timeout and safer network error messages.
 - Manual update checks compare installed version with public releases; the application does not auto-install updates.
 - **Verification limit:** CI tests packaging, browser E2E and MSI install/uninstall. A user-driven desktop UI test of Stronghold unlock and migration is still recommended. This is an unsigned preview release.
+
+## v0.1.2 reliability update
+
+- A previous preview was reported not to work on a user's Windows machine; the exact user-side failure has not yet been reproduced.
+- Vault migration now reopens the encrypted Stronghold snapshot before removing legacy v0.1.0 data. Failures preserve the old data.
+- Safer diagnostic messages for wrong passphrases and filesystem errors.
+- Saved-request success feedback now waits for encrypted persistence to finish.
+- Additional desktop IPC integration tests and a native Windows launch smoke check are release gates; a successful build alone does not establish bug-free behavior.

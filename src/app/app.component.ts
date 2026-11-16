@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, HostListener, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { isTauri } from '@tauri-apps/api/core';
-import { SecureWorkspace } from './core/secure-workspace';
+import { SecureWorkspace, describeVaultError } from './core/secure-workspace';
 import { checkForUpdates, RELEASES_PAGE } from './core/update-check';
 import { executeRequest } from './core/http-transport';
 import { loadWorkspace, saveWorkspace, downloadJson } from './core/storage';
@@ -20,7 +20,7 @@ export class AppComponent implements OnDestroy {
   readonly isDesktop=isTauri();
   readonly bytes=readableBytes;
   readonly releasesPage=RELEASES_PAGE;
-  readonly version='0.1.1';
+  readonly version='0.1.2';
   vaultLocked=false;
   vaultWorking=false;
   vaultPassphrase='';
@@ -72,8 +72,8 @@ export class AppComponent implements OnDestroy {
       this.activeCollectionId=first?.collectionId??null;
       this.vaultPassphrase='';this.vaultLocked=false;
       if(opened.migrated)this.inform('Previous workspace was securely migrated.');
-    }catch {
-      this.vaultError='Could not unlock the vault. Check your passphrase and local vault permissions. Existing data was not deleted.';
+    }catch(err: unknown) {
+      this.vaultError=describeVaultError(err);
     }finally {this.vaultWorking=false;}
   }
   async checkUpdates():Promise<void> {
@@ -98,16 +98,20 @@ export class AppComponent implements OnDestroy {
   trackId(_index:number,item:{id:string}):string{return item.id;}
   closePopup():void{this.showMenu=false;}
   inform(text:string):void {this.notice=text;if(this.notificationTimer)clearTimeout(this.notificationTimer);this.notificationTimer=setTimeout(()=>this.notice='',2800);}
-  persist():void {
+  async persist():Promise<boolean> {
     if (this.isDesktop) {
-      if (this.vaultLocked || !this.secureWorkspace) return;
-      void this.secureWorkspace.save(this.workspace).catch(() => {
-        this.warning='Encrypted workspace save failed. Export a backup before closing the app.';
-      });
-    } else {
-      const err=saveWorkspace(this.workspace);
-      if(err)this.warning=err;
+      if (this.vaultLocked || !this.secureWorkspace) return false;
+      try {
+        await this.secureWorkspace.save(this.workspace);
+        return true;
+      } catch {
+        this.warning='Encrypted workspace save failed. Your latest changes may not be stored. Export a private backup before closing.';
+        return false;
+      }
     }
+    const err=saveWorkspace(this.workspace);
+    if(err)this.warning=err;
+    return !err;
   }
   newRequest():void {this.draft=freshRequest();this.activeRequestId=null;this.activeCollectionId=this.workspace.collections[0]?.id??null;this.response=null;this.error='';this.editorTab='params';this.showMenu=false;}
   selectRequest(item:RequestDraft):void {this.draft=copyRequest(item);this.activeRequestId=item.id;this.activeCollectionId=item.collectionId;this.response=null;this.error='';this.sidebarTab='collections';this.closePopup();}
@@ -123,7 +127,7 @@ export class AppComponent implements OnDestroy {
     if(this.activeCollectionId===collection.id){this.newRequest();}
     this.persist();this.inform('Collection removed');
   }
-  saveRequest():void {
+  async saveRequest():Promise<void> {
     if(!this.draft.url.trim()){this.error='Enter a request URL before saving.';return;}
     const destination=this.workspace.collections.find(c=>c.id===this.activeCollectionId)??this.workspace.collections[0];
     if(!destination){this.showCreateCollection=true;this.inform('Create a collection before saving.');return;}
@@ -135,7 +139,8 @@ export class AppComponent implements OnDestroy {
     }else copy.id=makeId();
     destination.requests.push(copy);this.draft=copyRequest(copy);
     this.activeRequestId=copy.id;this.activeCollectionId=destination.id;
-    this.persist();this.error='';this.inform('Request saved');
+    if (!(await this.persist())) { this.error='Could not save the request. Check the workspace warning and retry.'; return; }
+    this.error='';this.inform('Request saved');
   }
   duplicateRequest():void {this.draft=copyRequest(this.draft);this.draft.id=makeId();this.draft.name=`${this.draft.name} copy`;this.activeRequestId=null;this.response=null;this.inform('Save this copy to a collection');}
   deleteRequest():void {

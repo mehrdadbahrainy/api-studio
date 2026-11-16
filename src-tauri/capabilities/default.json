@@ -24,6 +24,7 @@
         }
       ]
     },
-    "stronghold:default"
+    "stronghold:default",
+    "stronghold:allow-destroy"
   ]
 }
