@@ -50,7 +50,7 @@ async function openPasswordless(page) {
 async function enablePassword(page) {
   await page.getByRole('button', {name:'Workspace actions'}).click();
   await page.getByRole('button', {name:'Security settings'}).click();
-  await page.getByRole('textbox', {name:'New workspace passphrase'}).fill(PASS);
+  await page.getByLabel('New workspace passphrase').fill(PASS);
   await page.getByRole('button', {name:'Enable passphrase on next start'}).click();
   await expect(page.getByRole('heading', {name:'Security settings'})).toBeHidden();
 }
