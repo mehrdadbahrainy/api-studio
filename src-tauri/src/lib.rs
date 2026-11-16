@@ -70,7 +70,9 @@ pub fn run() {
             system_vault::protected_workspace_exists,
             system_vault::read_protected_workspace,
             system_vault::write_protected_workspace,
-            system_vault::remove_protected_workspace
+            system_vault::remove_protected_workspace,
+            system_vault::password_mode_enabled,
+            system_vault::set_password_mode
         ])
         .run(tauri::generate_context!())
         .expect("error running API Studio");
