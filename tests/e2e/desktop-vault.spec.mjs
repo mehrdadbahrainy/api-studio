@@ -18,6 +18,8 @@ async function emulateDesktop(page) {
       if (localStorage.getItem(FAIL) === '1') throw new Error('disk full (simulated)');
       localStorage.setItem(DISK, JSON.stringify(active));
     };
+    // Tauri 2's isTauri() probes window.isTauri, not just __TAURI_INTERNALS__.
+    window.isTauri = true;
     window.__TAURI_INTERNALS__ = {
       invoke: async (command, args = {}) => {
         if (command === 'plugin:path|resolve_directory') return 'C:/test/api-studio';
