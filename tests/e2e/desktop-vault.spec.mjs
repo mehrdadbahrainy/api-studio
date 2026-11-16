@@ -13,6 +13,7 @@ const PASS = 'test-vault-password-123';
  */
 async function desktop(page) {
   await page.addInitScript(() => {
+    window.isTauri = true;
     window.__TAURI_INTERNALS__ = {
       invoke: async (command, args = {}) => {
         if (command === 'is_system_vault_supported') return true;
