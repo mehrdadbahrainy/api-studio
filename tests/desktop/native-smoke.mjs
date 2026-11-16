@@ -114,7 +114,7 @@ async function main() {
 
   console.log('First run: encrypted migration, privacy and saving passed. Restarting process.');
   await stop();
-  page = await start(19322);
+  page = await start(19321);
   await page.locator('#vault-passphrase').fill('incorrect-passphrase-for-test');
   await page.getByRole('button',{name:/Unlock \/ create encrypted vault/}).click();
   await expect(page.getByRole('alert')).toContainText(/Incorrect passphrase|damaged encrypted workspace/i, {timeout:20_000});
