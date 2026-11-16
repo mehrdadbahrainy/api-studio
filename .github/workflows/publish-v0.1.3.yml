@@ -1,0 +1,93 @@
+name: Publish verified API Studio v0.1.3
+on:
+  workflow_run:
+    workflows: ['CI - install, test, build and desktop packaging']
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Verify exact tested main commit and version before publishing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          main_sha="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
+          test "$main_sha" = "$RUN_SHA" || { echo "Not publishing stale main commit"; exit 1; }
+          file="$(gh api "repos/$GITHUB_REPOSITORY/contents/package.json?ref=$RUN_SHA" --jq '.content' | base64 -d)"
+          version="$(echo "$file" | jq -r '.version')"
+          if [ "$version" != '0.1.3' ]; then
+            echo "Not the v0.1.3 source commit ($version)"
+            exit 1
+          fi
+          if gh release view v0.1.3 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'v0.1.3 was already published; no replacement will be attempted'
+            exit 0
+          fi
+          echo "EXACT_SHA=$RUN_SHA" >> "$GITHUB_ENV"
+          echo "RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
+          echo "Verified successful main CI run $RUN_ID for $RUN_SHA"
+
+      - name: Download exact successful CI Windows installers
+        if: env.RUN_ID != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name api-studio-windows-installers --dir downloaded
+
+      - name: Verify MSI and EXE asset names, create integrity checksums
+        if: env.RUN_ID != ''
+        run: |
+          set -euo pipefail
+          mkdir release-assets
+          test "$(find downloaded -type f -iname '*0.1.3*.msi' | wc -l)" -eq 1
+          test "$(find downloaded -type f -iname '*0.1.3*.exe' | wc -l)" -eq 1
+          find downloaded -type f -iname '*0.1.3*.msi' -exec cp '{}' release-assets/ ';'
+          find downloaded -type f -iname '*0.1.3*.exe' -exec cp '{}' release-assets/ ';'
+          (cd release-assets && sha256sum -- *.msi *.exe > SHA256SUMS.txt)
+          ls -lh release-assets/
+
+      - name: Publish tested v0.1.3 Windows release (not a preview)
+        if: env.RUN_ID != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > RELEASE_NOTES.md <<'NOTES'
+          # API Studio v0.1.3 — Postman import and passwordless Windows startup
+
+          ## What's improved
+          - Import Postman Collection v2.0 and v2.1 and Postman Environment JSON files through the workspace menu.
+          - Add Postman collections and environments without overwriting your existing requests or history. Native API Studio backups still request explicit replacement confirmation.
+          - Windows starts without an app passphrase by default. Saved workspace data is protected by the Windows CurrentUser DPAPI system, rather than being stored as plaintext.
+          - Optional user-chosen workspace passphrase in **Workspace actions → Security settings**. Enabling it requires at least 12 characters and replaces the Windows-protected copy only after verified encrypted persistence.
+          - Existing v0.1.2 password-protected workspace requires its previous passphrase once before verified migration to Windows account protection.
+          - More defensive handling of malformed Postman input, incompatible features and interrupted saves.
+
+          ## Compatibility and security
+          - Windows CurrentUser DPAPI typically ties protected data to the original Windows user and computer. Windows profile/password recovery, migration to another device or OS reinstall can make stored data inaccessible. Export private backups regularly.
+          - The encrypted v0.1.2 vault remains as a recovery snapshot after migration; v0.1.1 Stronghold files are never silently overwritten. Do not delete AppData until after verifying a backup.
+          - Postman scripts/tests, unsupported auth schemes, and file uploads are **not** imported as executable content. Review import warnings and finish unsupported settings manually.
+          - JSON exports are **not encrypted** and can contain passwords, tokens and API keys. Browser preview still uses localStorage without OS encryption.
+          - Windows installers are unsigned; SmartScreen may show an unverified publisher warning.
+
+          ## Verification
+          - Unit tests, TypeScript checks, production Angular build, browser HTTP and import E2E.
+          - Windows Server 2025 native startup and clean MSI install/uninstall. Installed WebView2 tests default startup without a password, local encrypted migration, persistence/restart, optional password, wrong passphrase and privacy.
+          - Automated tests cannot prove that a release is bug-free on every Windows configuration.
+
+          Download EXE or MSI for Windows x64 and verify the file using SHA256SUMS.txt.
+          Source: https://github.com/mehrdadbahrainy/api-studio
+          NOTES
+          gh release create v0.1.3 release-assets/* --repo "$GITHUB_REPOSITORY" --target "$EXACT_SHA" --title 'API Studio v0.1.3' --notes-file RELEASE_NOTES.md --latest
