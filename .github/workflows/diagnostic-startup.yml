@@ -1,0 +1,33 @@
+name: Diagnostic - isolated Stronghold startup
+on:
+  push:
+    branches: ['investigate/stronghold-startup']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  startup:
+    runs-on: windows-2025
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Fresh dependency install
+        run: npm install --no-audit --no-fund
+      - name: Build Windows executable without initializing Stronghold
+        run: npm run desktop:build
+      - name: Launch app with no CDP on Windows 2025
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = 'src-tauri/target/release/api_studio.exe'
+          if (-not (Test-Path $exe)) { throw 'Built desktop executable not found' }
+          $p = Start-Process -FilePath (Resolve-Path $exe) -PassThru
+          Start-Sleep -Seconds 12
+          $p.Refresh()
+          if ($p.HasExited) { throw "The isolated executable also exited: $($p.ExitCode)" }
+          Write-Host "PASS: stripped Stronghold initialization executable survived 12 seconds on Windows 2025"
+          Stop-Process -Id $p.Id -Force
