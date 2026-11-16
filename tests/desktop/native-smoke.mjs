@@ -54,7 +54,7 @@ async function start(port) {
       const pages = contexts.flatMap(c => c.pages());
       const page = pages.find(p => p.url().includes('tauri.localhost')) ?? pages.find(p => !p.url().startsWith('devtools:')) ?? pages[0];
       if (!page) { await candidate.close(); throw new Error('CDP connected but no application page is available'); }
-      await page.getByRole('textbox', {name:'Workspace passphrase'}).waitFor({state:'visible', timeout:5_000});
+      await page.locator('#vault-passphrase').waitFor({state:'visible', timeout:5_000});
       browser = candidate;
       return page;
     } catch (e) {
@@ -90,7 +90,7 @@ async function main() {
 
   await page.evaluate(([storageKey, data]) => localStorage.setItem(storageKey, JSON.stringify(data)), [key,legacy]);
   console.log('Seeded legacy workspace in the installed app WebView');
-  await page.getByRole('textbox',{name:'Workspace passphrase'}).fill(passphrase);
+  await page.locator('#vault-passphrase').fill(passphrase);
   await page.getByRole('button',{name:/Unlock \/ create encrypted vault/}).click();
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
   await expect(page.getByText('Legacy smoke collection')).toBeVisible();
@@ -115,10 +115,10 @@ async function main() {
   console.log('First run: encrypted migration, privacy and saving passed. Restarting process.');
   await stop();
   page = await start(19322);
-  await page.getByRole('textbox',{name:'Workspace passphrase'}).fill('incorrect-passphrase-for-test');
+  await page.locator('#vault-passphrase').fill('incorrect-passphrase-for-test');
   await page.getByRole('button',{name:/Unlock \/ create encrypted vault/}).click();
   await expect(page.getByRole('alert')).toContainText('Could not unlock the vault', {timeout:20_000});
-  await page.getByRole('textbox',{name:'Workspace passphrase'}).fill(passphrase);
+  await page.locator('#vault-passphrase').fill(passphrase);
   await page.getByRole('button',{name:/Unlock \/ create encrypted vault/}).click();
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
   await expect(page.getByText('Legacy smoke collection')).toBeVisible();
