@@ -1,5 +1,8 @@
 # API Studio
 
+> [!WARNING]
+> **Known v0.1.1 Windows startup issue (under investigation):** The preview installer can crash on startup in some Windows environments. A native Windows CI test reproduces exit code `0xC0000005` on Windows Server 2025; automated installer checks did not detect this. **Do not rely on v0.1.1 for production work.** See [issue #3](https://github.com/mehrdadbahrainy/api-studio/issues/3) and use [v0.1.0 preview](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.0) if it works in your environment. Back up your workspace before changing versions.
+
 A lightweight, local-first REST client built with **Angular 21** and **Tauri 2**.
 
 **No account, sync server or API key is needed to use the app itself.** Work with HTTP requests and keep your collections, environments and history on your own machine. **Desktop v0.1.1 uses a password-protected Stronghold vault; browser preview still uses unencrypted localStorage.**
