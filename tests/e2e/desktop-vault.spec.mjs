@@ -16,6 +16,12 @@ async function desktop(page) {
     window.__TAURI_INTERNALS__ = {
       invoke: async (command, args = {}) => {
         if (command === 'is_system_vault_supported') return true;
+        if (command === 'password_mode_enabled') return localStorage.getItem('test.password-mode') === '1';
+        if (command === 'set_password_mode') {
+          if(args.enabled)localStorage.setItem('test.password-mode','1');
+          else localStorage.removeItem('test.password-mode');
+          return null;
+        }
         if (command === 'protected_workspace_exists') return localStorage.getItem('test.api-studio.dpapi-file') !== null;
         if (command === 'read_protected_workspace') {
           const item = localStorage.getItem('test.api-studio.dpapi-file');
@@ -125,8 +131,18 @@ test('optional passphrase requires password on next start and wrong password pre
   expect(await page.evaluate(key=>localStorage.getItem(key),ENCRYPTED)).toBe(old);
   await page.locator('#vault-passphrase').fill(PASS);
   await page.getByRole('button', {name:'Unlock existing encrypted vault'}).click();
-  await openPasswordless(page);
+  await expect(page.locator('.vault-backdrop')).toBeHidden();
   await expect(page.getByRole('textbox', {name:'Request name'})).toHaveValue('Optional password request');
+  // Explicit password mode must survive more than one successful unlock.
+  await page.reload();
+  await expect(page.locator('#vault-passphrase')).toBeVisible();
+  await page.locator('#vault-passphrase').fill(PASS);
+  await page.getByRole('button', {name:'Unlock existing encrypted vault'}).click();
+  await expect(page.locator('.vault-backdrop')).toBeHidden();
+  await page.getByRole('button', {name:'Workspace actions'}).click();
+  await page.getByRole('button', {name:'Security settings'}).click();
+  await page.getByRole('button', {name:'Use Windows protection without app password'}).click();
+  await expect(page.getByRole('heading', {name:'Security settings'})).toBeHidden();
   await page.reload();
   await openPasswordless(page);
   assertNotPlaintext(await page.evaluate(key=>localStorage.getItem(key),PROTECTED),'Optional password request');
