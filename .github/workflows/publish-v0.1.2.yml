@@ -27,8 +27,8 @@ jobs:
           file="$(gh api "repos/$GITHUB_REPOSITORY/contents/package.json?ref=$RUN_SHA" --jq '.content' | base64 -d)"
           version="$(echo "$file" | jq -r '.version')"
           if [ "$version" != '0.1.2' ]; then
-            echo "Not the v0.1.2 source commit ($version)"
-            exit 1
+            echo "Skipping historical v0.1.2 publication because main now has version $version"
+            exit 0
           fi
           if gh release view v0.1.2 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo 'v0.1.2 was already published; no replacement will be attempted'
