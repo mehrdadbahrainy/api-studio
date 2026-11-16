@@ -20,7 +20,7 @@ export class AppComponent implements OnDestroy {
   readonly isDesktop=isTauri();
   readonly bytes=readableBytes;
   readonly releasesPage=RELEASES_PAGE;
-  readonly version='0.1.1';
+  readonly version='0.1.2';
   vaultLocked=false;
   vaultWorking=false;
   vaultPassphrase='';
@@ -72,8 +72,8 @@ export class AppComponent implements OnDestroy {
       this.activeCollectionId=first?.collectionId??null;
       this.vaultPassphrase='';this.vaultLocked=false;
       if(opened.migrated)this.inform('Previous workspace was securely migrated.');
-    }catch {
-      this.vaultError='Could not unlock the vault. Check your passphrase and local vault permissions. Existing data was not deleted.';
+    }catch (error: unknown) {
+      this.vaultError=error instanceof Error ? error.message : 'Could not unlock the encrypted workspace. Existing data was preserved.';
     }finally {this.vaultWorking=false;}
   }
   async checkUpdates():Promise<void> {
