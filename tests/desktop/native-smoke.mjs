@@ -144,7 +144,20 @@ async function main() {
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
   await expect(page.getByTitle('Legacy smoke collection').locator('span')).toBeVisible();
 
-  console.log('Encrypted migration back to Windows protection passed. Final restart.');
+  console.log('Passphrase unlock succeeded. It must remain enabled after restart.');
+  await stop();
+  page = await start(19321);
+  await page.locator('#vault-passphrase').waitFor({state:'visible',timeout:30_000});
+  await page.locator('#vault-passphrase').fill(passphrase);
+  await page.getByRole('button',{name:'Unlock existing encrypted vault'}).click();
+  await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
+  await page.getByTitle('Legacy smoke collection').locator('span').waitFor({state:'visible'});
+  // The user can explicitly disable password mode and fall back to DPAPI.
+  await page.getByRole('button',{name:'Workspace actions'}).click();
+  await page.getByRole('button',{name:'Security settings'}).click();
+  await page.getByRole('button',{name:'Use Windows protection without app password'}).click();
+  await expect(page.getByRole('heading',{name:'Security settings'})).toBeHidden({timeout:30_000});
+  console.log('Password disabled by user; restarting for passwordless DPAPI acceptance.');
   await stop();
   page = await start(19321);
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
@@ -152,7 +165,7 @@ async function main() {
   if (afterRestart !== null) throw new Error('Unencrypted workspace reappeared after restart');
   await page.getByRole('button',{name:'History',exact:true}).click();
   await expect(page.locator('.history-item')).toHaveCount(1);
-  console.log('PASS: installed Windows MSI, default passwordless DPAPI, legacy migration, optional password, wrong password, restart and private history');
+  console.log('PASS: installed Windows MSI, default passwordless DPAPI, legacy migration, optional persistent password, wrong password, explicit disable, restart and private history');
 
 }
 
