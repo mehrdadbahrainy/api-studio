@@ -1,7 +1,7 @@
 # API Studio
 
 > [!WARNING]
-> **Known v0.1.1 Windows startup issue (under investigation):** The preview installer can crash on startup in some Windows environments. A native Windows CI test reproduces exit code `0xC0000005` on Windows Server 2025; automated installer checks did not detect this. **Do not rely on v0.1.1 for production work.** See [issue #3](https://github.com/mehrdadbahrainy/api-studio/issues/3) and use [v0.1.0 preview](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.0) if it works in your environment. Back up your workspace before changing versions.
+> **Known v0.1.1 Windows startup issue:** The preview installer can crash on startup in some Windows environments. A native Windows CI test reproduces exit code `0xC0000005` on Windows Server 2025; automated installer checks did not detect this. **Do not rely on v0.1.1 for production work.** See [issue #3](https://github.com/mehrdadbahrainy/api-studio/issues/3) and use [v0.1.0 preview](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.0) if it works in your environment. Back up your workspace before changing versions.
 
 A lightweight, local-first REST client built with **Angular 21** and **Tauri 2**.
 
@@ -24,9 +24,9 @@ A lightweight, local-first REST client built with **Angular 21** and **Tauri 2**
 
 ## Download and use
 
-**Known broken preview:** [API Studio v0.1.1](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.1) (Windows x64 EXE and MSI installers, SHA-256 checksums). Previous version: [v0.1.0](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.0). Release assets do not have the short retention window of GitHub Actions artifacts. First-time users of desktop v0.1.1 must create and remember a workspace passphrase (minimum 12 characters); existing v0.1.0 users should export a private backup before updating.
+**Recommended Windows release:** [API Studio v0.1.2](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.2) (x64 EXE, MSI and SHA-256 checksums). **Do not use the v0.1.1 preview for new work:** it can crash on Windows startup. Before upgrading, export a private JSON backup where possible.
 
-These preview installers are **unsigned**, so Windows may warn about an unverified publisher. Automated tests, installer packaging and MSI installation/removal checks run in GitHub Actions; unlocking the encrypted desktop vault and its migration flow have not been independently tested through a real user-driven Windows UI session. There is no backend to configure and no sign-in step. Linux and macOS users can build from source using the instructions below.
+The installers are unsigned, and Windows may warn about an unverified publisher. Automated QA covers Angular production build, unit tests, Chromium E2E, native Windows process startup, installed MSI WebView2 vault acceptance (migration, restart, saved data, wrong password, privacy) and MSI uninstallation. Results from CI do not prove compatibility with every Windows computer. The app requires no backend or account.
 
 ### Requirements for development
 
@@ -114,7 +114,7 @@ Angular UI (request editor, collections, history)
 
 ## Release workflow
 
-The CI workflow runs unit tests, browser E2E, Angular build, Windows desktop packaging and clean Windows MSI installation/removal checks. The `.github/workflows/publish-v0.1.1.yml` workflow publishes a **public prerelease** from a fresh verified build on the merged main branch, with downloadable Windows installers and a SHA-256 checksum file. It can also be run manually through GitHub Actions.
+The CI workflow runs unit tests, browser E2E, Angular build, Windows desktop packaging, installed Windows WebView2 acceptance and clean Windows MSI installation/removal checks. The `.github/workflows/publish-v0.1.2.yml` workflow publishes v0.1.2 only after the exact main commit passes all CI gates, reusing the tested Windows installers and generating SHA-256 checksums. The previous `publish-v0.1.1.yml` produced the known-broken preview.
 
 For future version tags, the `.github/workflows/release.yml` workflow creates a draft cross-platform release for review.
 
@@ -131,6 +131,6 @@ MIT. See [LICENSE](LICENSE).
 - Manual update checks compare installed version with public releases; the application does not auto-install updates.
 - **Verification limit:** CI tests packaging, browser E2E and MSI install/uninstall. A user-driven desktop UI test of Stronghold unlock and migration is still recommended. This is an unsigned preview release.
 
-## v0.1.2 startup fix (in review)
+## v0.1.2 Windows startup fix
 
-Native application startup on Windows Server 2025 reproducibly crashes with Stronghold initialization in v0.1.1. The v0.1.2 fix removes the crashing native plugin while keeping the desktop workspace encrypted at rest using WebCrypto AES-256-GCM and writing only encrypted data through narrowly scoped native Rust commands. The old v0.1.1 Stronghold file is never modified; if present, the new app blocks silent migration to prevent losing inaccessible data. A private JSON export from a working v0.1.1 app can be imported later. This patch must pass startup, tests and clean installer checks before release.
+Native application startup on Windows Server 2025 reproducibly crashes with Stronghold initialization in v0.1.1. The v0.1.2 fix removes the crashing native plugin while keeping the desktop workspace encrypted at rest using WebCrypto AES-256-GCM and writing only encrypted data through narrowly scoped native Rust commands. The old v0.1.1 Stronghold file is never modified; if present, the new app blocks silent migration to prevent losing inaccessible data. A private JSON export from a working v0.1.1 app can be imported later. The v0.1.2 publishing workflow requires unit tests, browser E2E, installed-app WebView2 acceptance, clean install and uninstall on a Windows CI runner.
