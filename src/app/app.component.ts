@@ -2,11 +2,14 @@ import { CommonModule } from '@angular/common';
 import { Component, HostListener, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { isTauri } from '@tauri-apps/api/core';
+import { SecureWorkspace } from './core/secure-workspace';
+import { checkForUpdates, RELEASES_PAGE } from './core/update-check';
 import { executeRequest } from './core/http-transport';
 import { loadWorkspace, saveWorkspace, downloadJson } from './core/storage';
 import { addHistory, parseWorkspace } from './core/workspace-utils';
 import { activeVariables, readableBytes, RequestValidationError } from './core/request-utils';
-import { AuthMode, BodyMode, Collection, EditorTab, Environment, HistoryEntry, HttpMethod, HttpResult, KeyValue, RequestDraft, ResponseTab, Workspace, copyRequest, freshRequest, makeId, row } from './core/models';
+import { RequestTransportError } from './core/network-errors';
+import { AuthMode, BodyMode, Collection, EditorTab, Environment, HistoryEntry, HttpMethod, HttpResult, KeyValue, RequestDraft, ResponseTab, Workspace, copyRequest, freshRequest, initialWorkspace, makeId, row } from './core/models';
 
 @Component({
   selector:'app-root',standalone:true,imports:[CommonModule,FormsModule],
@@ -16,6 +19,15 @@ export class AppComponent implements OnDestroy {
   readonly methods:HttpMethod[]=['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'];
   readonly isDesktop=isTauri();
   readonly bytes=readableBytes;
+  readonly releasesPage=RELEASES_PAGE;
+  readonly version='0.1.1';
+  vaultLocked=false;
+  vaultWorking=false;
+  vaultPassphrase='';
+  vaultError='';
+  checkingUpdates=false;
+  updateInfo='';
+  private secureWorkspace:SecureWorkspace|null=null;
   workspace:Workspace;
   draft:RequestDraft;
   activeRequestId:string|null=null;
@@ -38,13 +50,39 @@ export class AppComponent implements OnDestroy {
   private notificationTimer:ReturnType<typeof setTimeout>|null=null;
 
   constructor() {
-    const state=loadWorkspace();this.workspace=state.workspace;this.warning=state.warning;
+    this.vaultLocked=this.isDesktop;
+    const state=this.isDesktop ? {workspace:initialWorkspace(),warning:''} : loadWorkspace();
+    this.workspace=state.workspace;this.warning=state.warning;
     const first=this.workspace.collections.flatMap(c=>c.requests)[0];
     this.draft=first?copyRequest(first):freshRequest();
     this.activeRequestId=first?.id??null;
     this.activeCollectionId=first?.collectionId??null;
   }
   ngOnDestroy():void {this.controller?.abort();if(this.notificationTimer)clearTimeout(this.notificationTimer);}
+  async unlockVault():Promise<void> {
+    if (!this.isDesktop || this.vaultWorking) return;
+    this.vaultError='';this.vaultWorking=true;
+    try {
+      const opened=await SecureWorkspace.unlock(this.vaultPassphrase);
+      this.secureWorkspace=opened.vault;
+      this.workspace=opened.workspace;
+      const first=this.workspace.collections.flatMap(c=>c.requests)[0];
+      this.draft=first?copyRequest(first):freshRequest();
+      this.activeRequestId=first?.id??null;
+      this.activeCollectionId=first?.collectionId??null;
+      this.vaultPassphrase='';this.vaultLocked=false;
+      if(opened.migrated)this.inform('Previous workspace was securely migrated.');
+    }catch {
+      this.vaultError='Could not unlock the vault. Check your passphrase and local vault permissions. Existing data was not deleted.';
+    }finally {this.vaultWorking=false;}
+  }
+  async checkUpdates():Promise<void> {
+    if (this.checkingUpdates) return;
+    this.closePopup();this.checkingUpdates=true;this.updateInfo='';
+    try {this.updateInfo=await checkForUpdates();}
+    catch {this.updateInfo='Update check failed. Check your connection and visit GitHub Releases manually.';}
+    finally {this.checkingUpdates=false;}
+  }
   get activeEnvironment():Environment|undefined {return this.workspace.environments.find(x=>x.id===this.workspace.selectedEnvironmentId);}
   get activeCollection():Collection|undefined {return this.workspace.collections.find(x=>x.id===this.activeCollectionId);}
   get totalRequests():number {return this.workspace.collections.reduce((a,c)=>a+c.requests.length,0);}
@@ -60,7 +98,17 @@ export class AppComponent implements OnDestroy {
   trackId(_index:number,item:{id:string}):string{return item.id;}
   closePopup():void{this.showMenu=false;}
   inform(text:string):void {this.notice=text;if(this.notificationTimer)clearTimeout(this.notificationTimer);this.notificationTimer=setTimeout(()=>this.notice='',2800);}
-  persist():void {const err=saveWorkspace(this.workspace);if(err)this.warning=err;}
+  persist():void {
+    if (this.isDesktop) {
+      if (this.vaultLocked || !this.secureWorkspace) return;
+      void this.secureWorkspace.save(this.workspace).catch(() => {
+        this.warning='Encrypted workspace save failed. Export a backup before closing the app.';
+      });
+    } else {
+      const err=saveWorkspace(this.workspace);
+      if(err)this.warning=err;
+    }
+  }
   newRequest():void {this.draft=freshRequest();this.activeRequestId=null;this.activeCollectionId=this.workspace.collections[0]?.id??null;this.response=null;this.error='';this.editorTab='params';this.showMenu=false;}
   selectRequest(item:RequestDraft):void {this.draft=copyRequest(item);this.activeRequestId=item.id;this.activeCollectionId=item.collectionId;this.response=null;this.error='';this.sidebarTab='collections';this.closePopup();}
   selectHistory(item:HistoryEntry):void {this.draft=copyRequest(item.request);this.draft.id=makeId();this.draft.collectionId=null;this.activeRequestId=null;this.activeCollectionId=this.workspace.collections[0]?.id??null;this.response=null;this.error='';this.inform('History request loaded. Save it to a collection if needed.');}
@@ -102,7 +150,7 @@ export class AppComponent implements OnDestroy {
   changeEnvironment(id:string):void {this.workspace.selectedEnvironmentId=id||null;this.persist();}
   toggleEnvironmentDialog():void{this.showEnvironments=!this.showEnvironments;this.showMenu=false;}
   async send():Promise<void> {
-    if(this.running)return;
+    if(this.running || this.vaultLocked)return;
     this.error='';this.response=null;this.responseTab='body';this.running=true;
     this.controller=new AbortController();
     try {
@@ -112,7 +160,7 @@ export class AppComponent implements OnDestroy {
       this.persist();
     }catch(err:unknown){
       const message=err instanceof Error?err.message:String(err);
-      this.error=err instanceof RequestValidationError?message:`Request failed: ${message}. ${!this.isDesktop?'If the browser blocked it, open the Tauri desktop app to bypass CORS.':''}`;
+      this.error=(err instanceof RequestValidationError || err instanceof RequestTransportError) ? message : 'Request failed unexpectedly. Please check the request and try again.';
       this.workspace.history=addHistory(this.workspace.history,this.draft,null,null);this.persist();
     }finally{this.running=false;this.controller=null;}
   }
@@ -136,7 +184,7 @@ export class AppComponent implements OnDestroy {
   }
   clearHistory():void{if(!confirm('Clear request history? Saved collections will not be changed.'))return;this.workspace.history=[];this.persist();}
   @HostListener('document:keydown',['$event']) onShortcut(event:KeyboardEvent):void {
-    if(!(event.ctrlKey||event.metaKey))return;
+    if(this.vaultLocked || !(event.ctrlKey||event.metaKey))return;
     if(event.key==='Enter'){event.preventDefault();void this.send();}
     if(event.key.toLowerCase()==='s'){event.preventDefault();this.saveRequest();}
     if(event.key.toLowerCase()==='n'){event.preventDefault();this.newRequest();}

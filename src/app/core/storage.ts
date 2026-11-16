@@ -1,6 +1,8 @@
 import { Workspace, initialWorkspace } from './models';
 import { parseWorkspace } from './workspace-utils';
 const KEY = 'api-studio.workspace.v1';
+export function hasLegacyWorkspace(): boolean {try {return localStorage.getItem(KEY)!==null;} catch {return false;}}
+export function removeLegacyWorkspace(): void {try {localStorage.removeItem(KEY);} catch { /* cleanup can be retried on next unlock */ }}
 export interface LoadStatus { workspace: Workspace; warning: string; }
 export function loadWorkspace(): LoadStatus {
   let raw: string|null;

@@ -2,7 +2,7 @@
 
 A lightweight, local-first REST client built with **Angular 21** and **Tauri 2**.
 
-**No account, sync server or API key is needed to use the app itself.** Work with HTTP requests and keep your collections, environments and history on your own machine.
+**No account, sync server or API key is needed to use the app itself.** Work with HTTP requests and keep your collections, environments and history on your own machine. **Desktop v0.1.1 uses a password-protected Stronghold vault; browser preview still uses unencrypted localStorage.**
 
 ## Features
 
@@ -100,12 +100,14 @@ Angular UI (request editor, collections, history)
 
 ### Security and limitations
 
-- **Secrets**: saved requests and environment values are stored in **unencrypted localStorage** in the desktop WebView. Do not store production credentials or share backups containing tokens/passwords. History removes authorization-related header entries and token/password fields, but sensitive data in URLs and request bodies may remain in history.
+- **Secrets (desktop v0.1.1)**: saved requests, tokens and environment values use an encrypted Stronghold workspace protected by a user-chosen passphrase (Argon2). No passphrase recovery is provided. On the first successful unlock, the unencrypted v0.1.0 data is migrated and only then removed. Browser preview remains unencrypted. JSON exports may contain credentials and must be kept private.
+- **History**: no body content, URL query values, form values, credentials or sensitive headers are retained. Legacy history is sanitized on import/migration. Replaying exact requests from history requires re-entering stripped data.
 - **HTTP**: sending credentials to an `http://` URL is unencrypted. Use HTTPS for sensitive APIs.
 - **Untrusted APIs**: desktop requests can reach arbitrary HTTP(S) addresses, including local services, by design. Only send requests to endpoints you trust. Imported workspaces do not execute automatically.
 - **Response preview**: text is displayed up to 5 MiB; large and binary responses do not have a full preview. File attachments, gRPC, WebSocket, multipart upload, scripts/tests, synchronization and tabs are out of scope for v0.1.
-- **Installer signing**: the release workflow does not sign Windows/macOS binaries, so OS warnings are possible. Generated release drafts should be reviewed before publishing.
+- **Installer signing**: the release workflow does not sign Windows/macOS binaries, so OS warnings are possible. The v0.1.1 CI adds an MSI install/uninstall smoke test on a clean Windows runner. Generated release drafts should be reviewed before publishing.
 - **Source build**: the source can be built on supported platforms, but the ZIP is not itself a ready-to-run installer.
+- **Updates**: the in-app Check for updates action compares installed version with public GitHub Releases, without downloading or automatically installing anything. Signed automatic updates require additional setup.
 
 ## Release workflow
 
@@ -119,3 +121,16 @@ git push origin main --tags
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## v0.1.1 development status (not released)
+
+Version **v0.1.0** remains the public installer. Version **v0.1.1** is in a development pull request pending CI verification and manual desktop acceptance testing.
+
+Changes under review:
+- Password-protected encrypted desktop workspace (Tauri Stronghold + Argon2) with safe migration from v0.1.0.
+- Privacy-focused History with empty request bodies and URL query values; saved collections remain intact.
+- 30-second request timeout, cancellation and actionable network errors without exposing transport exception contents.
+- In-app manual GitHub update check.
+- Extra unit/E2E tests and downloading/installing/uninstalling a Windows MSI in CI.
+
+**Before upgrading:** export a private backup of your v0.1.0 workspace, and keep the new vault passphrase safe. Losing the passphrase means losing access to the encrypted data. No GUI acceptance test on an actual user's Windows machine is claimed at this stage.

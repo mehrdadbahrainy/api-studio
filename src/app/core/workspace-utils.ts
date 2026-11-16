@@ -33,7 +33,7 @@ export function parseWorkspace(raw: unknown): Workspace {
     return {id,name:String(c.name??'Untitled collection').slice(0,120),requests:Array.isArray(c.requests)?c.requests.map((r:any)=>parseRequest(r,id)):[]};
   });
   const environments:Environment[]=input.environments.slice(0,80).map((e:any)=>({id:typeof e?.id==='string'?e.id:makeId(),name:String(e?.name??'Environment').slice(0,120),variables:cleanRows(e?.variables)}));
-  const history:HistoryEntry[]=Array.isArray(input.history)?input.history.slice(0,MAX_HISTORY).filter((h:any)=>h && typeof h==='object').map((h:any)=>({id:typeof h.id==='string'?h.id:makeId(),at:String(h.at??''),request:parseRequest(h.request??{},null),status:typeof h.status==='number'?h.status:null,durationMs:typeof h.durationMs==='number'?h.durationMs:null})):[];
+  const history:HistoryEntry[]=Array.isArray(input.history)?input.history.slice(0,MAX_HISTORY).filter((h:any)=>h && typeof h==='object').map((h:any)=>({id:typeof h.id==='string'?h.id:makeId(),at:String(h.at??''),request:redactHistoryRequest(parseRequest(h.request??{},null)),status:typeof h.status==='number'?h.status:null,durationMs:typeof h.durationMs==='number'?h.durationMs:null})):[];
   const selectedEnvironmentId=environments.some(e=>e.id===input.selectedEnvironmentId)?input.selectedEnvironmentId:null;
   return {version:1,collections,environments,selectedEnvironmentId,history};
 }
@@ -41,10 +41,31 @@ export function safeLoad(raw:string|null): Workspace {
   if (!raw) return initialWorkspace();
   try { return parseWorkspace(JSON.parse(raw)); } catch { return initialWorkspace(); }
 }
+/** History is navigation metadata, not a second credential/request-body store. */
+const PRIVATE_FIELD = /(?:auth(?:orization)?|bearer|token|secret|pass(?:word)?|api[-_]?key|cookie|session|credential|client[-_]?secret|access[-_]?key|signature|jwt)/i;
+function cleanHistoryUrl(input: string): string {
+  try {
+    const url = new URL(input);
+    for (const key of url.searchParams.keys()) url.searchParams.set(key, '');
+    url.username=''; url.password=''; url.hash='';
+    return url.toString();
+  } catch {
+    const [path, query] = input.split('?', 2);
+    if (!query) return path;
+    return `${path}?${query.split('&').map(item => `${item.split('=',1)[0]}=`).join('&')}`;
+  }
+}
+export function redactHistoryRequest(request: RequestDraft): RequestDraft {
+  const safe = copyRequest(request);
+  safe.url = cleanHistoryUrl(safe.url);
+  safe.bearerToken=''; safe.basicUsername=''; safe.basicPassword=''; safe.authMode='none';
+  safe.headers = safe.headers.filter(item => !PRIVATE_FIELD.test(item.key) && !PRIVATE_FIELD.test(item.value));
+  safe.params = safe.params.map(item => ({...item, value: ''}));
+  safe.formData = safe.formData.map(item => ({...item, value: ''}));
+  safe.body = ''; safe.bodyMode = 'none';
+  return safe;
+}
 export function addHistory(history: HistoryEntry[], request: RequestDraft, status: number|null,durationMs:number|null): HistoryEntry[] {
-  const entry:HistoryEntry={id:makeId(),at:new Date().toISOString(),request:copyRequest(request),status,durationMs};
-  // Secrets are not copied into history to avoid unnecessary proliferation.
-  entry.request.bearerToken=''; entry.request.basicPassword='';
-  entry.request.headers=entry.request.headers.filter(h=>!/(authorization|api[-_]?key|cookie|token|secret)/i.test(h.key));
+  const entry:HistoryEntry={id:makeId(),at:new Date().toISOString(),request:redactHistoryRequest(request),status,durationMs};
   return [entry,...history].slice(0,MAX_HISTORY);
 }
