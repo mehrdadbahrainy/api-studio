@@ -60,7 +60,7 @@
         <button type="button" class="header-icon-button" title="New request (Ctrl+N)" aria-label="New request" (click)="newRequest()"><svg class="ui-icon"><use href="assets/lucide.svg#plus"></use></svg></button>
         <div class="menu-container">
           <button type="button" class="header-icon-button ellipsis" (click)="showMenu=!showMenu" title="Workspace actions" aria-label="Workspace actions"><svg class="ui-icon"><use href="assets/lucide.svg#ellipsis"></use></svg></button>
-          @if (showMenu) {<div class="menu-popover"><button (click)="exportWorkspace()">Export workspace as JSON</button><label class="import-choice">Import JSON (API Studio / Postman)<input type="file" accept=".json,application/json" (change)="importWorkspace($event)" hidden></label><button (click)="duplicateRequest();closePopup()">Duplicate request</button><button (click)="checkUpdates()">Check for updates</button>@if(isSaved){<button class="danger" (click)="deleteRequest();closePopup()">Delete saved request</button>}</div>}
+          @if (showMenu) {<div class="menu-popover"><button (click)="exportWorkspace()">Export workspace as JSON</button><label class="import-choice">Import JSON (API Studio / Postman)<input type="file" accept=".json,application/json" (change)="importWorkspace($event)" hidden></label><button (click)="duplicateRequest();closePopup()">Duplicate request</button>@if(isDesktop){<button (click)="showSecurityDialog=true;securityError='';closePopup()">Security settings</button>}<button (click)="checkUpdates()">Check for updates</button>@if(isSaved){<button class="danger" (click)="deleteRequest();closePopup()">Delete saved request</button>}</div>}
         </div>
       </div>
     </header>
@@ -153,25 +153,54 @@
       <div class="modal-body"><div class="modal-options"><label>Active environment<select [ngModel]="workspace.selectedEnvironmentId??''" (ngModelChange)="changeEnvironment($event)"><option value="">No environment</option>@for(env of workspace.environments;track env.id){<option [value]="env.id">{{env.name}}</option>}</select></label><button class="button outline" (click)="createEnvironment()">+ Add environment</button></div>
         @if(activeEnvironment;as env){<div class="env-card"><div class="env-card-head"><label>Environment name<input [(ngModel)]="env.name" (ngModelChange)="persist()" aria-label="Environment name"></label><button type="button" class="danger-link" (click)="removeEnvironment(env.id)">Delete</button></div><div class="kv-table"><div class="kv-head"><span></span><span>VARIABLE</span><span>VALUE</span><span></span></div>@for(variable of env.variables;track variable.id){<div class="kv-row"><label class="check-wrap"><input type="checkbox" [(ngModel)]="variable.enabled" (ngModelChange)="persist()" aria-label="Enable variable"></label><input [(ngModel)]="variable.key" (ngModelChange)="persist()" placeholder="name" aria-label="Variable name"><input [(ngModel)]="variable.value" (ngModelChange)="persist()" placeholder="value" aria-label="Variable value"><button class="remove-row" (click)="removeRow(env.variables,variable.id);persist()" aria-label="Remove variable">×</button></div>}</div><button class="add-row-button" (click)="createRow(env.variables);persist()">+ Add variable</button></div>}
         @else {<div class="no-body">Choose an environment or add one to start editing variables.</div>}
-        <div class="modal-warning">{{isDesktop?'Desktop variables are stored in your password-protected encrypted vault.':'Browser variables are stored without encryption.'}} Workspace JSON exports are unencrypted and may contain credentials.</div>
+        <div class="modal-warning">{{isDesktop?(vaultMode==='system'?'Windows protects desktop variables for your user account.':'Desktop variables are stored in your password-protected encrypted vault.'):'Browser variables are stored without encryption.'}} Workspace JSON exports are unencrypted and may contain credentials.</div>
       </div><footer class="modal-footer"><button class="button primary" (click)="persist();showEnvironments=false">Done</button></footer>
     </section>
   </div>
 }
 @if(notice){<div class="toast" role="status">{{notice}}</div>}
 
+@if(showSecurityDialog && isDesktop && !vaultLocked){
+  <div class="modal-backdrop" (click)="showSecurityDialog=false">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="security-heading" (click)="$event.stopPropagation()">
+      <header class="modal-heading">
+        <div><p class="kicker">WORKSPACE SECURITY</p><h2 id="security-heading">Security settings</h2><p>Windows protects your workspace automatically. You can add an app passphrase if you prefer.</p></div>
+        <button class="modal-close" type="button" (click)="showSecurityDialog=false" aria-label="Close">×</button>
+      </header>
+      <div class="modal-body">
+        @if(vaultMode==='system'){
+          <div class="modal-warning">Current mode: Windows user account protection (DPAPI). No app password is required. A private JSON backup is recommended before Windows account recovery or moving to another computer.</div>
+          <label class="auth-field"><span>Optional workspace passphrase (at least 12 characters)</span>
+            <input type="password" name="newVaultPassphrase" [(ngModel)]="newVaultPassphrase" minlength="12" autocomplete="new-password" aria-label="New workspace passphrase" [disabled]="securityWorking" placeholder="Choose a passphrase to enable locking"></label>
+          <button class="button primary" type="button" [disabled]="securityWorking || newVaultPassphrase.length<12" (click)="enablePassphrase()">Enable passphrase on next start</button>
+        } @else {
+          <div class="modal-warning">Current mode: password-protected encrypted workspace. Removing the app passphrase stores the workspace under your Windows user account protection.</div>
+          <button class="button primary" type="button" [disabled]="securityWorking" (click)="disablePassphrase()">Use Windows protection without app password</button>
+        }
+        @if(securityError){<div class="alert error" role="alert">{{securityError}}</div>}
+        <p class="help-note">Workspace JSON exports are not encrypted. Keep backups private. Never share API keys or credentials publicly.</p>
+      </div>
+    </section>
+  </div>
+}
 @if (vaultLocked) {
   <div class="vault-backdrop">
-    <form class="vault-card" (ngSubmit)="unlockVault()" aria-label="Unlock encrypted workspace">
-      <div class="vault-lock-icon" aria-hidden="true">◆</div>
-      <p class="kicker">SECURE LOCAL WORKSPACE</p>
-      <h2>Unlock API Studio</h2>
-      <p>Create or enter your workspace passphrase. All saved requests, tokens, environments and history will be encrypted on this computer.</p>
-      <label for="vault-passphrase">Workspace passphrase</label>
-      <input id="vault-passphrase" name="vaultPassphrase" [(ngModel)]="vaultPassphrase" type="password" minlength="12" required autocomplete="off" placeholder="At least 12 characters" [disabled]="vaultWorking" autofocus>
-      @if(vaultError){<div class="vault-error" role="alert">{{vaultError}}</div>}
-      <button type="submit" class="button primary" [disabled]="vaultWorking || vaultPassphrase.length<12">{{vaultWorking?'Unlocking...':'Unlock / create encrypted vault'}}</button>
-      <small>Keep this passphrase safe. There is no account recovery. On first launch after upgrading from v0.1.0, existing local data is migrated only after encryption succeeds.</small>
-    </form>
+    @if(vaultStarting){
+      <section class="vault-card" aria-live="polite"><h2>Opening API Studio...</h2><p>Checking your protected workspace.</p></section>
+    } @else {
+      <form class="vault-card" (ngSubmit)="unlockVault()" aria-label="Unlock encrypted workspace">
+        <div class="vault-lock-icon" aria-hidden="true">◆</div>
+        <p class="kicker">SECURE LOCAL WORKSPACE</p>
+        <h2>Unlock API Studio</h2>
+        <p>{{vaultFatal?'Your previous workspace could not be opened safely. No files have been overwritten.':'Enter your existing workspace passphrase. On Windows, it will be needed only once to move to protected passwordless storage. On other desktop platforms, passphrase protection is required.'}}</p>
+        @if(!vaultFatal){
+          <label for="vault-passphrase">Workspace passphrase</label>
+          <input id="vault-passphrase" name="vaultPassphrase" [(ngModel)]="vaultPassphrase" type="password" minlength="12" required autocomplete="off" placeholder="Your existing passphrase" [disabled]="vaultWorking" autofocus>
+        }
+        @if(vaultError){<div class="vault-error" role="alert">{{vaultError}}</div>}
+        @if(!vaultFatal){<button type="submit" class="button primary" [disabled]="vaultWorking || vaultPassphrase.length<12">{{vaultWorking?'Unlocking...':'Unlock existing encrypted vault'}}</button>}
+        <small>Your data is preserved on migration failures. Never delete your previous AppData files without a verified private backup.</small>
+      </form>
+    }
   </div>
 }
