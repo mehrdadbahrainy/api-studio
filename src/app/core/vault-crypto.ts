@@ -57,7 +57,7 @@ export async function deriveVaultKey(passphrase: string, salt: Uint8Array): Prom
   const crypto = requireCrypto();
   const base = await crypto.subtle.importKey('raw', encoder.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: ITERATIONS, hash: 'SHA-256' }, base,
+    { name: 'PBKDF2', salt: new Uint8Array(salt), iterations: ITERATIONS, hash: 'SHA-256' }, base,
     { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
   );
 }
@@ -85,7 +85,7 @@ export async function decryptWorkspace(passphrase: string, serialized: string): 
   let plaintext: ArrayBuffer;
   try {
     plaintext = await requireCrypto().subtle.decrypt(
-      { name: 'AES-GCM', iv, additionalData: AUTH_CONTEXT }, key, fromBase64(envelope.ciphertext)
+      { name: 'AES-GCM', iv: new Uint8Array(iv), additionalData: AUTH_CONTEXT }, key, new Uint8Array(fromBase64(envelope.ciphertext))
     );
   } catch {
     throw new Error('Incorrect passphrase or corrupted encrypted workspace. No existing data was changed.');
