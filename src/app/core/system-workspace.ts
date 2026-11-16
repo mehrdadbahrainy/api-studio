@@ -17,6 +17,11 @@ export class SystemWorkspace {
 
   static async openOrCreate(): Promise<{vault: SystemWorkspace; workspace: Workspace; migrated: boolean} | null> {
     if (!await this.supported()) return null;
+    if (await invoke<boolean>('password_mode_enabled')) {
+      const encrypted=await invoke<string | null>('read_encrypted_workspace');
+      if(!encrypted)throw new Error('Password mode is active but its encrypted workspace is missing. Existing files were preserved.');
+      return null; // Respect the user's optional passphrase choice on every restart.
+    }
     const exists = await invoke<boolean>('protected_workspace_exists');
     if (exists) {
       const content = await invoke<string | null>('read_protected_workspace');
