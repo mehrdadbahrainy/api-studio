@@ -68,3 +68,53 @@ test('output formatting prettifies JSON but keeps plain text unchanged',()=>{
  assert.equal(prettyBody('{"ok":true}','application/json'),'{\n  "ok": true\n}');
  assert.equal(prettyBody('hello','text/plain'),'hello');assert.equal(readableBytes(2048),'2.0 KB');
 });
+
+
+test('history removes URL query values, auth, body, and form fields without mutating draft',()=>{
+ const d=freshRequest();d.method='POST';d.url='https://api.example.com/orders?api_key=SHHH&customer=sensitive';
+ d.bodyMode='json';d.body='{"password":"SHHH","notes":"sensitive"}';
+ d.authMode='basic';d.basicUsername='user';d.basicPassword='SHHH';
+ d.params=[row('token','SECRET'),row('user','PRIVATE')];
+ d.headers=[row('X-API-Key','SECRET'),row('Accept','application/json')];
+ d.formData=[row('secret','PRIVATE')];
+ const entry=addHistory([],d,201,90)[0].request;
+ assert.equal(entry.url.includes('SHHH'),false);
+ assert.equal(entry.url.includes('sensitive'),false);
+ assert.equal(entry.body,'');assert.equal(entry.bodyMode,'none');
+ assert.equal(entry.basicUsername,'');assert.equal(entry.basicPassword,'');
+ assert.equal(entry.authMode,'none');
+ assert.ok(entry.params.every(x=>x.value===''));
+ assert.ok(entry.formData.every(x=>x.value===''));
+ assert.ok(entry.headers.some(x=>x.key==='Accept'));
+ assert.ok(!entry.headers.some(x=>x.key==='X-API-Key'));
+ assert.equal(d.body.includes('SHHH'),true);
+});
+test('legacy imported workspace sanitizes previous history entries',()=>{
+ const w=initialWorkspace();const d=freshRequest();d.url='https://example.com/secret?token=old';
+ d.bodyMode='text';d.body='SECRET';d.authMode='bearer';d.bearerToken='old_token';
+ w.history=[{id:'historic',at:'2026-11-01T00:00:00Z',request:d,status:200,durationMs:10}];
+ const restored=parseWorkspace(JSON.parse(JSON.stringify(w)));
+ assert.ok(!JSON.stringify(restored.history).includes('old_token'));
+ assert.ok(!JSON.stringify(restored.history).includes('SECRET'));
+ assert.ok(!JSON.stringify(restored.history).includes('token=old'));
+});
+test('transport errors are actionable but never echo secrets embedded in native errors',()=>{
+ const {describeNetworkError}=require('../.test-dist/network-errors.js');
+ const secret='top-secret-token';
+ assert.equal(describeNetworkError(new Error(`GET https://example.com/?token=${secret}: ECONNREFUSED`)).kind,'connection');
+ assert.equal(describeNetworkError(new Error(`GET https://example.com/?token=${secret}: TLS handshake error`)).kind,'tls');
+ assert.equal(describeNetworkError(new Error('Something failed'),{browser:true}).kind,'unreachable');
+ assert.equal(describeNetworkError(new Error('AbortError'),{cancelled:true}).kind,'cancelled');
+ assert.equal(describeNetworkError(new Error('AbortError'),{timedOut:true}).kind,'timeout');
+ for(const error of [describeNetworkError(new Error(secret)),describeNetworkError(new Error(secret),{browser:true})]) {
+   assert.ok(!error.message.includes(secret));
+ }
+});
+test('release version comparison treats older and invalid releases safely',()=>{
+ const {isNewerRelease}=require('../.test-dist/version-utils.js');
+ assert.equal(isNewerRelease('v0.1.2','0.1.1'),true);
+ assert.equal(isNewerRelease('0.2.0','0.1.1'),true);
+ assert.equal(isNewerRelease('v0.1.1','0.1.1'),false);
+ assert.equal(isNewerRelease('v0.1.0','0.1.1'),false);
+ assert.equal(isNewerRelease('anything','0.1.1'),false);
+});
