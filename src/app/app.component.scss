@@ -16,3 +16,13 @@
 .send-button .ui-icon{width:18px;height:18px;flex-basis:18px}
 .copy-button{display:flex;align-items:center;gap:7px}
 .copy-button .ui-icon{width:14px;height:14px;flex-basis:14px}
+
+/* Desktop workspace is inaccessible until the password-protected vault unlocks. */
+.vault-backdrop{position:fixed;inset:0;z-index:150;display:flex;align-items:center;justify-content:center;padding:22px;background:#101828f2;backdrop-filter:blur(14px)}
+.vault-card{display:grid;gap:15px;width:min(460px,100%);padding:36px;background:#fff;border-radius:18px;box-shadow:0 32px 85px #030b1c70;color:#273650}
+.vault-card h2{font-size:25px;margin:0}.vault-card p{font-size:14px;line-height:1.6;margin:0;color:#66758d}
+.vault-card .kicker{font-size:11px;font-weight:800;letter-spacing:1.8px;color:#685ce4}
+.vault-card label{font-size:13px;font-weight:700}.vault-card input{height:44px;border:1px solid #d8deea;border-radius:8px;padding:0 13px;font-size:15px}
+.vault-card .button{justify-content:center;height:44px}.vault-card small{color:#8a95a5;line-height:1.6}
+.vault-lock-icon{width:48px;height:48px;border-radius:14px;background:#ebe9ff;color:#6458e5;display:grid;place-items:center;font-size:24px}
+.vault-error{padding:10px 12px;background:#fff1f2;color:#aa3e52;border-radius:7px;font-size:13px}
