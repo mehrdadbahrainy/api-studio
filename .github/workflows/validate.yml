@@ -63,7 +63,7 @@ jobs:
           retention-days: 7
   desktop-windows:
     name: Fresh Windows desktop installer build
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
@@ -75,6 +75,17 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Build real installer
         run: npm run desktop:build
+      - name: Native startup regression test (Windows Server 2025)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Resolve-Path 'src-tauri/target/release/api_studio.exe').Path
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 15
+          $p.Refresh()
+          if ($p.HasExited) { throw "Native executable crashed or exited: 0x$([Convert]::ToString($p.ExitCode,16))" }
+          Write-Host 'PASS: installed app code reached a live Windows process for 15 seconds'
+          Stop-Process -Id $p.Id -Force
       - uses: actions/upload-artifact@v4
         with:
           name: api-studio-windows-installers

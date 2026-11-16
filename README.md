@@ -5,7 +5,7 @@
 
 A lightweight, local-first REST client built with **Angular 21** and **Tauri 2**.
 
-**No account, sync server or API key is needed to use the app itself.** Work with HTTP requests and keep your collections, environments and history on your own machine. **Desktop v0.1.1 uses a password-protected Stronghold vault; browser preview still uses unencrypted localStorage.**
+**No account, sync server or API key is needed to use the app itself.** Work with HTTP requests and keep your collections, environments and history on your own machine. **Desktop v0.1.2 uses a password-protected AES-256-GCM encrypted workspace file; browser preview still uses unencrypted localStorage.**
 
 ## Features
 
@@ -24,7 +24,7 @@ A lightweight, local-first REST client built with **Angular 21** and **Tauri 2**
 
 ## Download and use
 
-**Latest preview:** [API Studio v0.1.1](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.1) (Windows x64 EXE and MSI installers, SHA-256 checksums). Previous version: [v0.1.0](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.0). Release assets do not have the short retention window of GitHub Actions artifacts. First-time users of desktop v0.1.1 must create and remember a workspace passphrase (minimum 12 characters); existing v0.1.0 users should export a private backup before updating.
+**Known broken preview:** [API Studio v0.1.1](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.1) (Windows x64 EXE and MSI installers, SHA-256 checksums). Previous version: [v0.1.0](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.0). Release assets do not have the short retention window of GitHub Actions artifacts. First-time users of desktop v0.1.1 must create and remember a workspace passphrase (minimum 12 characters); existing v0.1.0 users should export a private backup before updating.
 
 These preview installers are **unsigned**, so Windows may warn about an unverified publisher. Automated tests, installer packaging and MSI installation/removal checks run in GitHub Actions; unlocking the encrypted desktop vault and its migration flow have not been independently tested through a real user-driven Windows UI session. There is no backend to configure and no sign-in step. Linux and macOS users can build from source using the instructions below.
 
@@ -103,7 +103,7 @@ Angular UI (request editor, collections, history)
 
 ### Security and limitations
 
-- **Secrets (desktop v0.1.1)**: saved requests, tokens and environment values use an encrypted Stronghold workspace protected by a user-chosen passphrase (Argon2). No passphrase recovery is provided. On the first successful unlock, the unencrypted v0.1.0 data is migrated and only then removed. Browser preview remains unencrypted. JSON exports may contain credentials and must be kept private.
+- **Secrets (desktop v0.1.2 candidate)**: saved requests, tokens and environment values are encrypted with WebCrypto AES-256-GCM using a PBKDF2-SHA256 key derived from a user-chosen passphrase and random per-workspace salt. Tauri only stores ciphertext in the app-local data folder. No password recovery is provided. The unencrypted v0.1.0 data is removed only after encrypted save succeeds. Existing v0.1.1 Stronghold snapshots are detected and never overwritten automatically; import a private JSON backup for migration. Browser preview remains unencrypted. JSON exports may contain credentials and must be kept private.
 - **History**: no body content, URL query values, form values, credentials or sensitive headers are retained. Legacy history is sanitized on import/migration. Replaying exact requests from history requires re-entering stripped data.
 - **HTTP**: sending credentials to an `http://` URL is unencrypted. Use HTTPS for sensitive APIs.
 - **Untrusted APIs**: desktop requests can reach arbitrary HTTP(S) addresses, including local services, by design. Only send requests to endpoints you trust. Imported workspaces do not execute automatically.
@@ -124,9 +124,13 @@ MIT. See [LICENSE](LICENSE).
 
 ## v0.1.1 notes
 
-- Desktop Stronghold vault encrypts saved workspace and environment values with a user-chosen passphrase; browser preview does not use this vault.
+- Desktop encrypted vault encrypts saved workspace and environment values with a user-chosen passphrase; browser preview does not use this vault.
 - Legacy workspace migration only removes the unencrypted storage entry after an encrypted save has succeeded. Export a private backup of v0.1.0 data before updating.
 - History removes request bodies, query values, credentials and sensitive headers. Replaying sanitized entries may require re-entering parameters.
 - Requests support cancellation, a 30-second timeout and safer network error messages.
 - Manual update checks compare installed version with public releases; the application does not auto-install updates.
 - **Verification limit:** CI tests packaging, browser E2E and MSI install/uninstall. A user-driven desktop UI test of Stronghold unlock and migration is still recommended. This is an unsigned preview release.
+
+## v0.1.2 startup fix (in review)
+
+Native application startup on Windows Server 2025 reproducibly crashes with Stronghold initialization in v0.1.1. The v0.1.2 fix removes the crashing native plugin while keeping the desktop workspace encrypted at rest using WebCrypto AES-256-GCM and writing only encrypted data through narrowly scoped native Rust commands. The old v0.1.1 Stronghold file is never modified; if present, the new app blocks silent migration to prevent losing inaccessible data. A private JSON export from a working v0.1.1 app can be imported later. This patch must pass startup, tests and clean installer checks before release.
