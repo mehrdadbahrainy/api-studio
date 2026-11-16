@@ -17,7 +17,11 @@ permissions:
 jobs:
   installed-windows-acceptance:
     name: Installed MSI + native WebView2 vault E2E
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -96,6 +100,36 @@ jobs:
             $p.Refresh()
             if ($p.HasExited) { Write-Host "Standalone startup exit code: $($p.ExitCode)" }
             else { Write-Host 'Standalone process remained running for 8 seconds'; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+          }
+      - name: Compare v0.1.0 startup on same runner after a failed native acceptance
+        if: failure()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Write-Host 'Checking whether the previously released v0.1.0 app also crashes in the same runner environment'
+          $newMsi = Get-ChildItem downloaded-installers -Filter '*.msi' -File -Recurse | Select-Object -First 1
+          if ($newMsi) {
+            $p = Start-Process msiexec.exe -ArgumentList "/x `"$($newMsi.FullName)`" /qn /norestart" -PassThru -Wait
+            Write-Host "Uninstall current MSI: $($p.ExitCode)"
+          }
+          New-Item -ItemType Directory -Force -Path baseline-download | Out-Null
+          gh release download v0.1.0 --repo "$env:GITHUB_REPOSITORY" --pattern '*.msi' --dir baseline-download
+          $oldMsi = Get-ChildItem baseline-download -Filter '*.msi' -File | Select-Object -First 1
+          if ($oldMsi) {
+            $p = Start-Process msiexec.exe -ArgumentList "/i `"$($oldMsi.FullName)`" /qn /norestart" -PassThru -Wait
+            Write-Host "Install v0.1.0 MSI: $($p.ExitCode)"
+            $exe = Join-Path $env:ProgramFiles 'API Studio\api_studio.exe'
+            if (Test-Path $exe) {
+              $p = Start-Process -FilePath $exe -PassThru
+              Start-Sleep -Seconds 8
+              $p.Refresh()
+              if ($p.HasExited) { Write-Host "BASELINE v0.1.0 STARTUP: crashed/exited, code $($p.ExitCode)" }
+              else { Write-Host 'BASELINE v0.1.0 STARTUP: remained running for 8 seconds'; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+            }
+            $p = Start-Process msiexec.exe -ArgumentList "/x `"$($oldMsi.FullName)`" /qn /norestart" -PassThru -Wait
+            Write-Host "Uninstall v0.1.0: $($p.ExitCode)"
           }
       - name: Uninstall MSI after acceptance test
         if: always()
