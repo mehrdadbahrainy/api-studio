@@ -129,7 +129,7 @@ async function main() {
   // passwordless DPAPI copy only after the encrypted write is verified.
   await page.getByRole('button',{name:'Workspace actions'}).click();
   await page.getByRole('button',{name:'Security settings'}).click();
-  await page.getByRole('textbox',{name:'New workspace passphrase'}).fill(passphrase);
+  await page.getByLabel('New workspace passphrase').fill(passphrase);
   await page.getByRole('button',{name:'Enable passphrase on next start'}).click();
   await expect(page.getByRole('heading',{name:'Security settings'})).toBeHidden({timeout:30_000});
   console.log('Optional password enabled. Restarting for wrong passphrase acceptance.');
