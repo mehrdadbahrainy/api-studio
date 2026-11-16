@@ -6,7 +6,8 @@ import { SecureWorkspace, describeVaultError } from './core/secure-workspace';
 import { checkForUpdates, RELEASES_PAGE } from './core/update-check';
 import { executeRequest } from './core/http-transport';
 import { loadWorkspace, saveWorkspace, downloadJson } from './core/storage';
-import { addHistory, parseWorkspace } from './core/workspace-utils';
+import { addHistory } from './core/workspace-utils';
+import { parseImportedJson } from './core/import-json';
 import { activeVariables, readableBytes, RequestValidationError } from './core/request-utils';
 import { RequestTransportError } from './core/network-errors';
 import { AuthMode, BodyMode, Collection, EditorTab, Environment, HistoryEntry, HttpMethod, HttpResult, KeyValue, RequestDraft, ResponseTab, Workspace, copyRequest, freshRequest, initialWorkspace, makeId, row } from './core/models';
@@ -20,7 +21,7 @@ export class AppComponent implements OnDestroy {
   readonly isDesktop=isTauri();
   readonly bytes=readableBytes;
   readonly releasesPage=RELEASES_PAGE;
-  readonly version='0.1.2';
+  readonly version='0.1.3';
   vaultLocked=false;
   vaultWorking=false;
   vaultPassphrase='';
@@ -177,16 +178,39 @@ export class AppComponent implements OnDestroy {
     downloadJson(this.workspace,'api-studio-workspace.json');this.closePopup();
   }
   async importWorkspace(event:Event):Promise<void> {
-    const input=event.target as HTMLInputElement;const file=input.files?.[0];input.value='';if(!file)return;
-    if(file.size>8_000_000){this.error='Workspace file is too large (8 MB limit).';return;}
+    const input=event.target as HTMLInputElement;
+    const file=input.files?.[0];input.value='';
+    if(!file)return;
+    if(file.size>8_000_000){this.error='Import file is too large (8 MB limit).';return;}
     try {
-      const parsed=parseWorkspace(JSON.parse(await file.text()));
-      if(!confirm('Replace your current collections, environments and history with this backup?'))return;
-      this.workspace=parsed;this.persist();const first=parsed.collections.flatMap(c=>c.requests)[0];
-      if(first)this.selectRequest(first);else this.newRequest();
-      this.inform('Workspace imported');this.error='';
-    }catch(err:unknown){this.error='Import failed: '+(err instanceof Error?err.message:String(err));}
-    finally{this.closePopup();}
+      let json:unknown;
+      try { json=JSON.parse(await file.text()); }
+      catch { throw new Error('Invalid JSON file. Export a valid JSON collection from Postman or API Studio.'); }
+      const result=parseImportedJson(json,this.workspace);
+      const native=result.kind==='native';
+      const prompt=native
+        ? 'Replace ALL current collections, environments and history with this API Studio backup? Make an export first if needed.'
+        : result.kind==='postman-collection'
+          ? 'Add '+result.importedRequests+' Postman requests in '+result.importedCollections+' collections to your existing workspace? No existing collections or history will be removed. Imported JSON may contain secrets.'
+          : 'Add this Postman environment to your existing workspace? The imported environment will become active. Imported JSON may contain secrets.';
+      if(!confirm(prompt))return;
+      const original=this.workspace;
+      this.workspace=result.workspace;
+      if(!(await this.persist())){
+        this.workspace=original;
+        this.error='Import was not saved. Existing workspace remains open; check storage permissions and retry.';
+        return;
+      }
+      const first=this.workspace.collections.flatMap(c=>c.requests).find(x=>x.id===result.firstRequestId);
+      if(first)this.selectRequest(first);
+      else if(native)this.newRequest();
+      this.error='';
+      this.warning=result.warnings.length ? 'Postman import limitations: '+result.warnings.join(' ') : '';
+      this.inform(native?'Workspace restored':result.kind==='postman-environment'
+        ? 'Postman environment added':'Postman collection imported ('+result.importedRequests+' requests)');
+    }catch(err:unknown){
+      this.error='Import failed: '+(err instanceof Error?err.message:'Unknown file format.');
+    }finally{this.closePopup();}
   }
   clearHistory():void{if(!confirm('Clear request history? Saved collections will not be changed.'))return;this.workspace.history=[];this.persist();}
   @HostListener('document:keydown',['$event']) onShortcut(event:KeyboardEvent):void {
