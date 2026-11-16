@@ -145,9 +145,24 @@ jobs:
           }
           if (-not $exe) { throw "MSI installed but main app executable was not found. InstallLocation='$($installed.InstallLocation)'" }
           "API_STUDIO_EXE=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Enable CI-only WebView2 debugging through elevated-host machine policy
+        shell: pwsh
+        run: |
+          # WebView2 Runtime 150+ ignores debugger environment flags for elevated processes.
+          # HKLM policy works on the disposable hosted runner and is removed after this test.
+          $key = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name 'api_studio.exe' -PropertyType String -Value '--remote-debugging-port=19321' -Force | Out-Null
+          Get-ItemProperty -Path $key | Format-List
       - name: Real installed WebView2 vault migration and restart E2E
         shell: pwsh
         run: node tests/desktop/native-smoke.mjs
+      - name: Remove CI-only WebView2 debugging policy
+        if: always()
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          Remove-ItemProperty -Path $key -Name 'api_studio.exe' -ErrorAction SilentlyContinue
       - name: Uninstall tested MSI
         if: always()
         shell: pwsh
