@@ -72,6 +72,31 @@ jobs:
         shell: pwsh
         run: node tests/desktop/native-smoke.mjs
 
+      - name: Diagnose native process and WebView2 runtime on failed acceptance
+        if: failure()
+        shell: pwsh
+        run: |
+          Write-Host 'Windows session:'
+          query session 2>&1 | Out-String | Write-Host
+          Write-Host 'WebView2 runtime versions:'
+          $folder = "${env:ProgramFiles(x86)}\Microsoft\EdgeWebView\Application"
+          if (Test-Path $folder) { Get-ChildItem $folder -Directory | Select-Object Name | Format-Table | Out-String | Write-Host }
+          Write-Host 'Recent application crash records:'
+          $events = Get-WinEvent -FilterHashtable @{LogName='Application';StartTime=(Get-Date).AddMinutes(-20)} -ErrorAction SilentlyContinue |
+            Where-Object { $_.Id -in @(1000,1001,1002) -and ($_.Message -match 'api_studio|WebView2|msedgewebview2|Application Error') } |
+            Select-Object -First 8
+          foreach ($entry in $events) {
+            Write-Host "Event $($entry.Id): $($entry.TimeCreated)"
+            Write-Host $entry.Message
+          }
+          Write-Host 'Test standalone application startup without CDP:'
+          if ($env:API_STUDIO_EXE -and (Test-Path $env:API_STUDIO_EXE)) {
+            $p = Start-Process -FilePath $env:API_STUDIO_EXE -PassThru
+            Start-Sleep -Seconds 8
+            $p.Refresh()
+            if ($p.HasExited) { Write-Host "Standalone startup exit code: $($p.ExitCode)" }
+            else { Write-Host 'Standalone process remained running for 8 seconds'; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+          }
       - name: Uninstall MSI after acceptance test
         if: always()
         shell: pwsh
