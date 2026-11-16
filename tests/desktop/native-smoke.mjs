@@ -93,7 +93,7 @@ async function main() {
   await page.locator('#vault-passphrase').fill(passphrase);
   await page.getByRole('button',{name:/Unlock \/ create encrypted vault/}).click();
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
-  await expect(page.getByText('Legacy smoke collection')).toBeVisible();
+  await expect(page.getByTitle('Legacy smoke collection').locator('span')).toBeVisible();
   const afterMigration = await page.evaluate(k => localStorage.getItem(k), key);
   if (afterMigration !== null) throw new Error('Unencrypted legacy workspace was not removed after successful migration');
   const historic = await page.evaluate(k => {
@@ -121,7 +121,7 @@ async function main() {
   await page.locator('#vault-passphrase').fill(passphrase);
   await page.getByRole('button',{name:/Unlock \/ create encrypted vault/}).click();
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
-  await expect(page.getByText('Legacy smoke collection')).toBeVisible();
+  await expect(page.getByTitle('Legacy smoke collection').locator('span')).toBeVisible();
   const saved = page.locator('.request-nav').filter({hasText:'Native saved request'});
   await expect(saved).toBeVisible();
   await saved.click();
