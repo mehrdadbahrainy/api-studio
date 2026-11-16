@@ -63,7 +63,7 @@ jobs:
           retention-days: 7
   desktop-windows:
     name: Fresh Windows desktop installer build
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
@@ -75,6 +75,17 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Build real installer
         run: npm run desktop:build
+      - name: Native startup regression test (Windows Server 2025)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Resolve-Path 'src-tauri/target/release/api_studio.exe').Path
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 15
+          $p.Refresh()
+          if ($p.HasExited) { throw "Native executable crashed or exited: 0x$([Convert]::ToString($p.ExitCode,16))" }
+          Write-Host 'PASS: installed app code reached a live Windows process for 15 seconds'
+          Stop-Process -Id $p.Id -Force
       - uses: actions/upload-artifact@v4
         with:
           name: api-studio-windows-installers
@@ -87,14 +98,20 @@ jobs:
   desktop-install-smoke:
     name: Download MSI artifact and test install/uninstall
     needs: desktop-windows
-    runs-on: windows-latest
-    timeout-minutes: 20
+    runs-on: windows-2025
+    timeout-minutes: 30
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+      - name: Install native acceptance dependencies
+        run: npm install --no-audit --no-fund
       - uses: actions/download-artifact@v4
         with:
           name: api-studio-windows-installers
           path: downloaded-installers
-      - name: Verify installation and removal on a clean runner
+      - name: Install verified MSI on a clean runner
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -114,5 +131,44 @@ jobs:
             Where-Object { $_.DisplayName -like '*API Studio*' } | Select-Object -First 1
           if (-not $installed) { throw 'MSI succeeded, but API Studio registration was not found' }
           Write-Host "Installed: $($installed.DisplayName)"
-          $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/x `"$($msi.FullName)`" /qn /norestart" -PassThru -Wait
-          if ($process.ExitCode -notin @(0,3010)) { throw "MSI uninstall failed: $($process.ExitCode)" }
+          $locations = @()
+          if ($installed.InstallLocation) { $locations += $installed.InstallLocation }
+          $locations += (Join-Path $env:ProgramFiles 'API Studio')
+          if (${env:ProgramFiles(x86)}) { $locations += (Join-Path ${env:ProgramFiles(x86)} 'API Studio') }
+          $locations += (Join-Path $env:LOCALAPPDATA 'Programs\API Studio')
+          $exe = $null
+          foreach ($folder in $locations) {
+            if (-not (Test-Path $folder)) { continue }
+            $exe = Get-ChildItem -Path $folder -File -Filter '*.exe' -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -notmatch 'unins|uninstall|setup|update' } | Select-Object -First 1
+            if ($exe) { break }
+          }
+          if (-not $exe) { throw "MSI installed but main app executable was not found. InstallLocation='$($installed.InstallLocation)'" }
+          "API_STUDIO_EXE=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Enable CI-only WebView2 debugging through elevated-host machine policy
+        shell: pwsh
+        run: |
+          # WebView2 Runtime 150+ ignores debugger environment flags for elevated processes.
+          # HKLM policy works on the disposable hosted runner and is removed after this test.
+          $key = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name 'api_studio.exe' -PropertyType String -Value '--remote-debugging-port=19321' -Force | Out-Null
+          Get-ItemProperty -Path $key | Format-List
+      - name: Real installed WebView2 vault migration and restart E2E
+        shell: pwsh
+        run: node tests/desktop/native-smoke.mjs
+      - name: Remove CI-only WebView2 debugging policy
+        if: always()
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          Remove-ItemProperty -Path $key -Name 'api_studio.exe' -ErrorAction SilentlyContinue
+      - name: Uninstall tested MSI
+        if: always()
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem -Path downloaded-installers -Filter '*.msi' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($msi) {
+            $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList "/x `"$($msi.FullName)`" /qn /norestart" -PassThru -Wait
+            if ($process.ExitCode -notin @(0,3010)) { throw "MSI uninstall failed: $($process.ExitCode)" }
+          }
