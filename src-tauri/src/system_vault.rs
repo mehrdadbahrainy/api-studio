@@ -6,6 +6,7 @@ use tauri::Manager;
 const PRIMARY: &str = "workspace.protected.dat";
 const BACKUP: &str = "workspace.protected.bak";
 const TEMP: &str = "workspace.protected.tmp";
+const PASSWORD_MODE: &str = "workspace.password-mode";
 const MAX_BYTES: usize = 20 * 1024 * 1024;
 
 fn paths(app: &tauri::AppHandle) -> Result<(PathBuf, PathBuf, PathBuf), String> {
@@ -147,6 +148,30 @@ pub fn remove_protected_workspace(app: tauri::AppHandle) -> Result<(), String> {
         if file.exists() {
             fs::remove_file(file).map_err(|_| "Could not clear previous passwordless workspace.")?;
         }
+    }
+    Ok(())
+}
+
+fn password_mode_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_local_data_dir().map_err(|_| "Cannot locate workspace storage.")?;
+    Ok(dir.join(PASSWORD_MODE))
+}
+
+#[tauri::command]
+pub fn password_mode_enabled(app: tauri::AppHandle) -> Result<bool, String> {
+    let marker = password_mode_path(&app)?;
+    Ok(marker.exists())
+}
+
+#[tauri::command]
+pub fn set_password_mode(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let marker = password_mode_path(&app)?;
+    if enabled {
+        let dir = marker.parent().ok_or("Missing workspace directory")?;
+        fs::create_dir_all(dir).map_err(|_| "Cannot create workspace directory.")?;
+        fs::write(marker, b"password-mode-v1").map_err(|_| "Cannot record passphrase preference.")?;
+    } else if marker.exists() {
+        fs::remove_file(marker).map_err(|_| "Cannot disable passphrase preference.")?;
     }
     Ok(())
 }
