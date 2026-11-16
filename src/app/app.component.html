@@ -171,7 +171,7 @@
       <input id="vault-passphrase" name="vaultPassphrase" [(ngModel)]="vaultPassphrase" type="password" minlength="12" required autocomplete="off" placeholder="At least 12 characters" [disabled]="vaultWorking" autofocus>
       @if(vaultError){<div class="vault-error" role="alert">{{vaultError}}</div>}
       <button type="submit" class="button primary" [disabled]="vaultWorking || vaultPassphrase.length<12">{{vaultWorking?'Unlocking...':'Unlock / create encrypted vault'}}</button>
-      <small>Keep this passphrase safe. There is no account recovery. Your previous v0.1.0 data is kept until the encrypted vault is saved and reopened successfully. If unlocking fails, do not uninstall or delete your application data folder.</small>
+      <small>Keep this passphrase safe. There is no account recovery. Your previous v0.1.0 data is kept until the new encrypted vault can be decrypted successfully. v0.1.1 Stronghold vault files are preserved but are not automatically imported: export a private backup from a working v0.1.1 first. If unlocking fails, never delete the app data folder.</small>
     </form>
   </div>
 }
