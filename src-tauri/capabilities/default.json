@@ -23,6 +23,7 @@
           "url": "https://*:*"
         }
       ]
-    }
+    },
+    "stronghold:default"
   ]
 }
