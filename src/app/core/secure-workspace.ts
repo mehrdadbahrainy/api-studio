@@ -25,9 +25,16 @@ export class SecureWorkspace {
     const key = await deriveVaultKey(passphrase, salt);
     const vault = new SecureWorkspace(key, salt);
     await vault.save(legacy.workspace);
-    // Only remove v0.1.0 plaintext data AFTER encrypted file write successfully finishes.
+    // Do not discard legacy data until a fresh read of the persisted ciphertext
+    // succeeds and decrypts back to the exact workspace we intended to save.
+    const verifiedFile = await invoke<string | null>('read_encrypted_workspace');
+    if (!verifiedFile) throw new Error('Encrypted vault verification failed; old data was preserved.');
+    const verified = await decryptWorkspace(passphrase, verifiedFile);
+    if (JSON.stringify(verified.workspace) !== JSON.stringify(legacy.workspace)) {
+      throw new Error('Encrypted vault verification failed; old data was preserved.');
+    }
     if (migrated) removeLegacyWorkspace();
-    return {vault, workspace: legacy.workspace, migrated};
+    return {vault, workspace: verified.workspace, migrated};
   }
   save(workspace: Workspace): Promise<void> {
     // Freeze the snapshot immediately. Each write uses a fresh AES-GCM nonce.
@@ -35,9 +42,29 @@ export class SecureWorkspace {
     const operation = this.pending.catch(() => undefined).then(async () => {
       const payload = await encryptWorkspace(snapshot, this.key, this.salt);
       await invoke('write_encrypted_workspace', {payload});
+      // Confirm the native file was actually committed before showing success.
+      const persisted = await invoke<string | null>('read_encrypted_workspace');
+      if (persisted !== payload) throw new Error('Encrypted vault save verification failed.');
     });
     this.pending = operation;
     return operation;
   }
   flush(): Promise<void> { return this.pending; }
+}
+
+/** Never echo raw Tauri/Rust errors, because they may contain local paths. */
+export function describeVaultError(error: unknown): string {
+  const text = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  if (text.includes('stronghold vault exists'))
+    return 'A v0.1.1 Stronghold vault exists and was preserved. Restore from a private JSON export before creating a new vault. Never delete the old AppData files.';
+  if (text.includes('incorrect passphrase') || text.includes('corrupted encrypted'))
+    return 'Incorrect passphrase or damaged encrypted workspace. No saved data was deleted.';
+  if (text.includes('at least 12')) return 'Enter a passphrase with at least 12 characters.';
+  if (text.includes('older workspace could not be read'))
+    return 'Previous workspace could not be read. Its original data was preserved.';
+  if (text.includes('verification failed') || text.includes('save failed'))
+    return 'Encrypted workspace could not be verified or saved. Original data was preserved; check available storage and permissions.';
+  if (text.includes('webcrypto') || text.includes('secure context'))
+    return 'Secure Web Crypto is unavailable. Update the Windows WebView2 runtime.';
+  return 'Could not unlock the workspace. Existing data was preserved. Check storage permissions and try again.';
 }
