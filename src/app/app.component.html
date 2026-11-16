@@ -60,7 +60,7 @@
         <button type="button" class="header-icon-button" title="New request (Ctrl+N)" aria-label="New request" (click)="newRequest()"><svg class="ui-icon"><use href="assets/lucide.svg#plus"></use></svg></button>
         <div class="menu-container">
           <button type="button" class="header-icon-button ellipsis" (click)="showMenu=!showMenu" title="Workspace actions" aria-label="Workspace actions"><svg class="ui-icon"><use href="assets/lucide.svg#ellipsis"></use></svg></button>
-          @if (showMenu) {<div class="menu-popover"><button (click)="exportWorkspace()">Export workspace as JSON</button><label class="import-choice">Import workspace JSON<input type="file" accept=".json,application/json" (change)="importWorkspace($event)" hidden></label><button (click)="duplicateRequest();closePopup()">Duplicate request</button><button (click)="checkUpdates()">Check for updates</button>@if(isSaved){<button class="danger" (click)="deleteRequest();closePopup()">Delete saved request</button>}</div>}
+          @if (showMenu) {<div class="menu-popover"><button (click)="exportWorkspace()">Export workspace as JSON</button><label class="import-choice">Import JSON (API Studio / Postman)<input type="file" accept=".json,application/json" (change)="importWorkspace($event)" hidden></label><button (click)="duplicateRequest();closePopup()">Duplicate request</button><button (click)="checkUpdates()">Check for updates</button>@if(isSaved){<button class="danger" (click)="deleteRequest();closePopup()">Delete saved request</button>}</div>}
         </div>
       </div>
     </header>
