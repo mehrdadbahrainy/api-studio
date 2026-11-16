@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, HostListener, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { isTauri } from '@tauri-apps/api/core';
-import { SecureWorkspace } from './core/secure-workspace';
+import { SecureWorkspace, describeVaultError } from './core/secure-workspace';
 import { checkForUpdates, RELEASES_PAGE } from './core/update-check';
 import { executeRequest } from './core/http-transport';
 import { loadWorkspace, saveWorkspace, downloadJson } from './core/storage';
@@ -73,7 +73,7 @@ export class AppComponent implements OnDestroy {
       this.vaultPassphrase='';this.vaultLocked=false;
       if(opened.migrated)this.inform('Previous workspace was securely migrated.');
     }catch (error: unknown) {
-      this.vaultError=error instanceof Error ? error.message : 'Could not unlock the encrypted workspace. Existing data was preserved.';
+      this.vaultError=describeVaultError(error);
     }finally {this.vaultWorking=false;}
   }
   async checkUpdates():Promise<void> {
