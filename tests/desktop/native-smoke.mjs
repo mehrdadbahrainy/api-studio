@@ -90,6 +90,23 @@ async function main() {
 
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
   console.log('PASS: fresh installed Windows desktop opens without an app passphrase');
+  // Real installed MSI/WebView2 smoke for the new workspace navigation controls.
+  const firstCollection=page.getByRole('button',{name:'Collapse Getting started'});
+  await expect(firstCollection).toHaveAttribute('aria-expanded','true');
+  await firstCollection.click();
+  await expect(page.getByRole('button',{name:'Expand Getting started'})).toBeVisible();
+  await page.getByRole('button',{name:'Expand Getting started'}).click();
+  await expect(page.locator('.collection-requests .request-nav')).toHaveCount(1);
+  const resize=page.getByRole('separator',{name:'Resize sidebar'});
+  await resize.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(resize).toHaveAttribute('aria-valuenow','302');
+  await page.getByRole('button',{name:'Collapse sidebar'}).click();
+  await expect(page.locator('.sidebar')).toHaveClass(/is-collapsed/);
+  await page.getByRole('button',{name:'Expand sidebar'}).click();
+  await expect(page.locator('.sidebar')).not.toHaveClass(/is-collapsed/);
+  console.log('PASS: installed WebView2 collection disclosure and sidebar layout controls');
+
   await page.evaluate(async ([storageKey, data]) => {
     localStorage.setItem(storageKey, JSON.stringify(data));
     // Simulate upgrading from a pre-DPAPI legacy workspace: the old release
