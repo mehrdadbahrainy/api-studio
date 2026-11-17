@@ -33,3 +33,10 @@ test('unavailable localStorage is nonfatal',()=>{
   assert.equal(readSidebarPreferences(storage).width,DEFAULT_SIDEBAR_WIDTH);
   assert.doesNotThrow(()=>writeSidebarPreferences(storage,{width:282,collapsed:false,collapsedCollectionIds:[]}));
 });
+
+test('the initial Collection has a stable identity across unsaved fresh workspaces',()=>{
+  const {initialWorkspace}=require('../.test-dist/models.js');
+  const first=initialWorkspace(),next=initialWorkspace();
+  assert.equal(first.collections[0].id,next.collections[0].id);
+  assert.equal(first.collections[0].name,'Getting started');
+});
