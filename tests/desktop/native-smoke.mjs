@@ -110,10 +110,10 @@ async function main() {
   const leaked = await page.evaluate(k => Object.values({...localStorage}).join('\n').includes(k), legacyToken);
   if (leaked) throw new Error('Legacy token leaked in WebView local storage after migration');
 
-  await page.getByRole('button',{name:'History',exact:true}).click();
+  await page.getByRole('tab',{name:'History',exact:true}).click();
   const historyText = await page.locator('.history-item').first().innerText();
   if (historyText.includes(legacyToken)) throw new Error('History still contains original secret');
-  await page.getByRole('button',{name:'Collections',exact:true}).click();
+  await page.getByRole('tab',{name:'Collections',exact:true}).click();
   await page.getByRole('textbox',{name:'Request name'}).fill('Native saved request');
   await page.getByRole('textbox',{name:'Request URL'}).fill('https://example.com/native-test');
   await page.getByRole('button',{name:/Save request/}).click();
@@ -167,7 +167,7 @@ async function main() {
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
   const afterRestart = await page.evaluate(k => localStorage.getItem(k), key);
   if (afterRestart !== null) throw new Error('Unencrypted workspace reappeared after restart');
-  await page.getByRole('button',{name:'History',exact:true}).click();
+  await page.getByRole('tab',{name:'History',exact:true}).click();
   await expect(page.locator('.history-item')).toHaveCount(1);
   console.log('PASS: installed Windows MSI, default passwordless DPAPI, legacy migration, optional persistent password, wrong password, explicit disable, restart and private history');
 
