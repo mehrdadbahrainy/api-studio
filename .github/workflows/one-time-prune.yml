@@ -1,0 +1,71 @@
+# One-time branch cleanup, triggered only when this reviewed file lands on main.
+# Verifies exact SHA leases and no open PRs before deleting any branch.
+# The last step removes this workflow from main after successful cleanup.
+name: One-time cleanup of superseded API Studio branches
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/one-time-prune.yml']
+permissions:
+  contents: write
+  pull-requests: read
+jobs:
+  prune:
+    if: github.repository == 'mehrdadbahrainy/api-studio'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Delete only exact verified obsolete branch heads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS='|' read -r branch expected; do
+            [[ -n "$branch" ]] || continue
+            actual="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$branch" --jq '.object.sha' 2>/dev/null || true)"
+            if [[ -z "$actual" ]]; then echo "Already absent: $branch"; continue; fi
+            if [[ "$actual" != "$expected" ]]; then
+              echo "::warning::Preserved changed branch $branch ($actual != $expected)"
+              continue
+            fi
+            open_prs="$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&per_page=100" --jq "[.[] | select(.head.ref == \"$branch\")] | length")"
+            if [[ "$open_prs" != 0 ]]; then echo "::warning::Preserved branch with open PR: $branch"; continue; fi
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch" >/dev/null
+            echo "Deleted superseded branch: $branch"
+          done <<'RETIRED'
+          feat/initial-angular-tauri-app|4773ee3346f13988a065417bf8848bb882d68024
+          feat/v0.1.1-security-reliability|44612d8e05b1ff92274014fb942f76ee9abec488
+          feat/v0.1.4-workspace-ux|9cd773c60fd038679a1140e3250930082a40d08e
+          fix/native-vault-startup|f24762340b85f9861813da55b9b392f0fc5e81bb
+          fix/v0.1.2-desktop-startup-regressions|e3b49d6e745d2cfd07ca4850e4d559f7350eb4b7
+          fix/v0.1.2-encrypted-vault|746b8b76a27e7a38b7bd86321ff22d92a89bd9b6
+          fix/v0.1.3-postman-import|08925da71a19e6cdd8512e3b49bf01e0d9b8a51b
+          investigate/stronghold-startup|29f3b2733bccd2c0c1b7708874d1983d2121c871
+          test/windows-native-vault-acceptance|5c29437e4081ee90c381bd27a085c21242a8d0b6
+          RETIRED
+      - name: Remove merged housekeeping PR branch after verifying PR closed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          merged="$(gh api "repos/$GITHUB_REPOSITORY/pulls/12" --jq '.merged')"
+          if [[ "$merged" == true ]]; then
+            branch='chore/v0.1.4-github-presentation'
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch" >/dev/null
+            echo "Deleted merged housekeeping branch: $branch"
+          else
+            echo '::warning::PR #12 not merged, leaving housekeeping branch in place'
+            exit 1
+          fi
+      - name: Self-remove one-time cleanup workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          path='.github/workflows/one-time-prune.yml'
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=main" --jq '.sha')"
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/contents/$path" -f message='chore: finish one-time obsolete branch cleanup' -f sha="$sha" -f branch=main >/dev/null
+          echo 'Removed one-time workflow; branch cleanup completed.'
