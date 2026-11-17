@@ -26,3 +26,101 @@
 .vault-card .button{justify-content:center;height:44px}.vault-card small{color:#8a95a5;line-height:1.6}
 .vault-lock-icon{width:48px;height:48px;border-radius:14px;background:#ebe9ff;color:#6458e5;display:grid;place-items:center;font-size:24px}
 .vault-error{padding:10px 12px;background:#fff1f2;color:#aa3e52;border-radius:7px;font-size:13px}
+
+
+/* v0.1.4: scalable navigation, consistent controls and calmer content hierarchy. */
+.app-shell{grid-template-columns:var(--sidebar-width,282px) minmax(0,1fr);transition:grid-template-columns 150ms ease-out}
+.app-shell.layout-resizing{transition:none;cursor:col-resize;user-select:none}
+.app-shell.layout-resizing *{cursor:col-resize!important}
+.sidebar{min-width:0;z-index:4;box-shadow:1px 0 16px #060d1e14;background:linear-gradient(180deg,#10192e 0%,#121d33 68%,#142039 100%)}
+.brandline{padding:0 17px;gap:11px}
+.brand-logo{flex-shrink:0}
+.brand-names{min-width:0}
+.brand-ver{white-space:nowrap}
+.sidebar-toggle{display:inline-flex;align-items:center;justify-content:center;flex:0 0 32px;width:32px;height:32px;margin-left:9px;padding:0;border:1px solid #33425c;background:#1c2940;color:#aebed9;border-radius:9px}
+.sidebar-toggle:hover{background:#2a3c58;color:#fff}
+.sidebar-toggle .ui-icon{width:17px;height:17px;flex:0 0 17px}
+.sidebar-tabs{margin-bottom:18px}
+.sidebar-tabs button{display:flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
+.sidebar-tabs button .ui-icon{width:15px;height:15px;flex:0 0 15px}
+.sidebar-tabs button.selected{background:#354567;box-shadow:inset 0 0 0 1px #56688c55,0 2px 8px #050b1840}
+.sidebar-heading{gap:8px}
+.sidebar-heading-actions{display:flex;align-items:center;gap:3px}
+.sidebar-heading-actions .subtle-icon{width:26px;height:27px;flex:0 0 26px}
+.sidebar-heading-actions .new-collection-action{color:#a99fff}
+.sidebar-scroll{scrollbar-gutter:stable}
+.collection-group{margin:0 0 10px}
+.collection-title{height:41px;gap:3px;padding:0 5px;min-width:0;border-radius:9px;transition:background 130ms ease}
+.collection-title:hover{background:#1e2c46}
+.collection-toggle{display:flex;align-items:center;gap:8px;flex:1;min-width:0;height:37px;padding:0 4px;background:transparent;text-align:left;color:#d2daec;border-radius:7px;font-size:13px;font-weight:700}
+.collection-toggle .truncate{flex:1}
+.collection-toggle small{flex-shrink:0;margin:0 2px 0 0;padding:3px 7px;border-radius:6px;background:#25344c;color:#a4b2ca;font-size:11px;line-height:1.1}
+.collection-chevron.ui-icon{width:13px;height:13px;flex:0 0 13px;color:#7789a7;transition:transform 120ms ease}
+.folder-glyph.ui-icon{width:16px;height:16px;flex:0 0 16px;color:#9a91ff}
+.collection-delete{display:inline-flex;align-items:center;justify-content:center;flex:0 0 26px;width:26px;height:26px;opacity:.18;border-radius:6px;padding:0;background:transparent;color:#a9b7cf}
+.collection-delete:hover{opacity:1!important;background:#4c263a;color:#ffbec5}
+.collection-delete .ui-icon{width:14px;height:14px;flex:0 0 14px}
+.collection-requests{margin:0 0 5px 20px;padding:1px 0 3px 10px;border-left:1px solid #33445f}
+.collection-requests .request-nav{min-height:38px;margin:2px 0 3px;padding:8px 9px;gap:8px;border-radius:7px}
+.request-nav{transition:background 120ms,color 120ms}
+.request-nav.active{background:linear-gradient(90deg,#433e75 0%,#2c3854 100%);box-shadow:inset 3px 0 #a397ff}
+.request-nav:focus-visible,.collection-toggle:focus-visible{outline:2px solid #afa4ff;outline-offset:1px}
+.collection-empty{padding:7px 4px;margin:0;color:#8796b2}
+.sidebar-resize-handle{position:absolute;right:-6px;top:0;bottom:0;width:12px;z-index:8;display:flex;align-items:center;justify-content:center;cursor:col-resize;touch-action:none;outline-offset:-2px}
+.sidebar-resize-handle::after{content:"";position:absolute;right:5px;top:0;bottom:0;width:1px;background:transparent;transition:background 120ms ease}
+.sidebar-resize-handle:hover::after,.sidebar-resize-handle:focus-visible::after,.layout-resizing .sidebar-resize-handle::after{background:#857bff}
+.resize-grip{width:5px;height:62px;border-radius:8px;background:#8d80ff;opacity:0;transition:opacity 120ms ease}
+.sidebar-resize-handle:hover .resize-grip,.sidebar-resize-handle:focus-visible .resize-grip,.layout-resizing .resize-grip{opacity:1}
+.sidebar.is-collapsed .brandline{height:112px;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:12px 5px}
+.sidebar.is-collapsed .brand-names,.sidebar.is-collapsed .brand-ver,.sidebar.is-collapsed .workspace-title,.sidebar.is-collapsed .sidebar-scroll,.sidebar.is-collapsed .sidebar-bottom{display:none}
+.sidebar.is-collapsed .sidebar-toggle{margin:0;width:34px;height:34px}
+.sidebar.is-collapsed .sidebar-tabs{flex-direction:column;gap:8px;margin:16px 9px;padding:5px;background:transparent}
+.sidebar.is-collapsed .sidebar-tabs button{width:42px;height:42px;flex:0 0 42px;padding:0;border-radius:10px}
+.sidebar.is-collapsed .sidebar-tabs button span{display:none}
+.sidebar.is-collapsed .sidebar-tabs button .ui-icon{width:20px;height:20px;flex-basis:20px}
+.sidebar.is-collapsed .sidebar-resize-handle{display:none}
+.ui-icon{display:block;width:18px;height:18px;flex:0 0 18px;vertical-align:initial;transform:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;stroke-linecap:round;fill:none}
+:where(.header-icon-button,.subtle-icon,.sidebar-toggle,.collection-delete,.modal-close,.remove-row,.copy-button,.send-button,.button,.environment-button){align-items:center;justify-content:center;gap:8px}
+.header-icon-button{display:inline-flex;padding:0;line-height:1}
+.header-icon-button.ellipsis{padding:0;letter-spacing:normal}
+.header-icon-button .ui-icon,.subtle-icon .ui-icon{width:18px;height:18px;flex:0 0 18px}
+.button{display:inline-flex;line-height:1.2}
+.button .ui-icon{width:17px;height:17px;flex:0 0 17px}
+.environment-button{justify-content:flex-start;min-width:0;gap:8px;line-height:1.15}
+.environment-button .downchevron{margin-left:auto;line-height:1}
+.send-button{display:inline-flex;gap:9px}
+.send-button .ui-icon{width:17px;height:17px;flex:0 0 17px}
+.copy-button{display:inline-flex;gap:7px}
+.copy-button .ui-icon{width:15px;height:15px;flex:0 0 15px}
+.add-row-button{display:inline-flex;align-items:center;justify-content:center;min-height:32px}
+.search-box{border-color:#364763;background:#1d2b44;border-radius:9px}
+.search-box:focus-within{border-color:#8075e7;box-shadow:0 0 0 2px #8175e728}
+.search-box .ui-icon{width:16px;height:16px;flex:0 0 16px}
+.inline-new .icon-button{display:inline-flex;align-items:center;justify-content:center;width:32px;padding:0}
+.inline-new .ui-icon{width:16px;height:16px;flex:0 0 16px}
+.main{background:linear-gradient(180deg,#f9faff 0%,#f4f6fb 100%)}
+.topbar{box-shadow:0 1px 0 #1b294005}
+.card{border-color:#e0e6f2;border-radius:14px;box-shadow:0 9px 28px #17264209}
+.page-content{max-width:1450px}
+.headline h1{color:#172642}
+.request-bar{border-color:#d9e0ed;box-shadow:0 2px 10px #1d29400b}
+.request-bar:focus-within{border-color:#aca5ed;box-shadow:0 0 0 3px #aea5ef22}
+.request-name-input:focus-visible{outline:none;border-bottom-color:#6559e7}
+.editor-tabs button.active::after,.response-tabs button.active::after{height:3px;border-radius:3px 3px 0 0}
+.send-button{background:linear-gradient(135deg,#6658f1,#5547da)}
+.send-button:hover{background:linear-gradient(135deg,#5849e5,#4e41ce)}
+.menu-popover{border-radius:11px;box-shadow:0 18px 44px #182c4a24}
+.sidebar.is-collapsed .sidebar-tabs button.selected{background:#354567}
+@media(hover:none){.collection-delete{opacity:.9}}
+@media(max-width:760px){
+  .app-shell{display:block}
+  .sidebar-resize-handle{display:none}
+  .brandline{justify-content:space-between}
+  .sidebar.is-collapsed .brandline{height:64px;flex-direction:row;justify-content:space-between;padding:0 15px}
+  .sidebar.is-collapsed .sidebar-tabs{display:none}
+  .sidebar.is-collapsed .sidebar-toggle{width:36px;height:36px}
+  .sidebar-scroll{scrollbar-gutter:auto}
+  .collection-toggle{font-size:14px}
+  .sidebar-heading-actions .subtle-icon{width:29px;height:29px}
+}
+@media(prefers-reduced-motion:reduce){.app-shell,.collection-chevron.ui-icon,.collection-title,.request-nav,.resize-grip{transition:none!important}}
