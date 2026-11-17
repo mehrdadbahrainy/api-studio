@@ -1,5 +1,5 @@
 /**
- * Native WebView2 acceptance test for a *real installed* API Studio v0.1.2 Windows binary.
+ * Native WebView2 acceptance test for a *real installed* API Studio v0.1.3 Windows binary.
  * Runs on a disposable GitHub-hosted Windows runner. CDP is enabled exclusively via
  * a child-process environment variable. Never enable this in distributed releases.
  * Reference: https://playwright.dev/docs/webview2
@@ -54,7 +54,7 @@ async function start(port) {
       const pages = contexts.flatMap(c => c.pages());
       const page = pages.find(p => p.url().includes('tauri.localhost')) ?? pages.find(p => !p.url().startsWith('devtools:')) ?? pages[0];
       if (!page) { await candidate.close(); throw new Error('CDP connected but no application page is available'); }
-      await page.locator('#vault-passphrase').waitFor({state:'visible', timeout:5_000});
+      await page.locator('.app-shell').waitFor({state:'visible', timeout:5_000});
       browser = candidate;
       return page;
     } catch (e) {
@@ -88,19 +88,27 @@ async function main() {
     },status:200,durationMs:12}]
   };
 
-  await page.evaluate(([storageKey, data]) => localStorage.setItem(storageKey, JSON.stringify(data)), [key,legacy]);
-  console.log('Seeded legacy workspace in the installed app WebView');
-  await page.locator('#vault-passphrase').fill(passphrase);
-  await page.getByRole('button',{name:/Unlock \/ create encrypted vault/}).click();
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
-  await expect(page.getByTitle('Legacy smoke collection').locator('span')).toBeVisible();
+  console.log('PASS: fresh installed Windows desktop opens without an app passphrase');
+  await page.evaluate(async ([storageKey, data]) => {
+    localStorage.setItem(storageKey, JSON.stringify(data));
+    // Simulate upgrading from a pre-DPAPI legacy workspace: the old release
+    // stored localStorage but had no Windows protected native workspace.
+    await window.__TAURI_INTERNALS__.invoke('remove_protected_workspace');
+  }, [key,legacy]);
+  // The installed WebView2 flushes localStorage asynchronously. Killing the
+  // process immediately after injection can lose the legacy fixture before
+  // migration starts. Reload within the *installed* WebView2 first, so the
+  // actual Angular/Tauri migration executes against the fixture. Subsequent
+  // process restarts validate DPAPI persistence separately.
+  console.log('Seeded legacy workspace; reloading installed WebView2 to perform native DPAPI migration');
+  await page.reload();
+  await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
+  await expect(page.getByTitle('Legacy smoke collection').locator('span')).toBeVisible({timeout:30_000});
   const afterMigration = await page.evaluate(k => localStorage.getItem(k), key);
-  if (afterMigration !== null) throw new Error('Unencrypted legacy workspace was not removed after successful migration');
-  const historic = await page.evaluate(k => {
-    const all = {...localStorage};
-    return Object.values(all).join('\n').includes(k);
-  }, legacyToken);
-  if (historic) throw new Error('Legacy token leaked in WebView local storage after migration');
+  if (afterMigration !== null) throw new Error('Unencrypted legacy workspace was not removed after successful DPAPI migration');
+  const leaked = await page.evaluate(k => Object.values({...localStorage}).join('\n').includes(k), legacyToken);
+  if (leaked) throw new Error('Legacy token leaked in WebView local storage after migration');
 
   await page.getByRole('button',{name:'History',exact:true}).click();
   const historyText = await page.locator('.history-item').first().innerText();
@@ -110,27 +118,59 @@ async function main() {
   await page.getByRole('textbox',{name:'Request URL'}).fill('https://example.com/native-test');
   await page.getByRole('button',{name:/Save request/}).click();
   await expect(page.locator('.toast')).toContainText('Request saved');
-  await delay(2000); // Encrypted file persistence is awaited by the save action.
 
-  console.log('First run: encrypted migration, privacy and saving passed. Restarting process.');
+  console.log('Native protected migration and saving passed. Restarting without a password.');
   await stop();
   page = await start(19321);
-  await page.locator('#vault-passphrase').fill('incorrect-passphrase-for-test');
-  await page.getByRole('button',{name:/Unlock \/ create encrypted vault/}).click();
-  await expect(page.getByRole('alert')).toContainText(/Incorrect passphrase|damaged encrypted workspace/i, {timeout:20_000});
-  await page.locator('#vault-passphrase').fill(passphrase);
-  await page.getByRole('button',{name:/Unlock \/ create encrypted vault/}).click();
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
   await expect(page.getByTitle('Legacy smoke collection').locator('span')).toBeVisible();
-  const saved = page.locator('.request-nav').filter({hasText:'Native saved request'});
+  const saved=page.locator('.request-nav').filter({hasText:'Native saved request'});
   await expect(saved).toBeVisible();
   await saved.click();
   await expect(page.getByRole('textbox',{name:'Request URL'})).toHaveValue('https://example.com/native-test');
-  await page.getByRole('button',{name:'History',exact:true}).click();
-  await expect(page.locator('.history-item')).toHaveCount(1);
+
+  // Opt-in passphrase should create encrypted storage and remove the
+  // passwordless DPAPI copy only after the encrypted write is verified.
+  await page.getByRole('button',{name:'Workspace actions'}).click();
+  await page.getByRole('button',{name:'Security settings'}).click();
+  await page.getByLabel('New workspace passphrase').fill(passphrase);
+  await page.getByRole('button',{name:'Enable passphrase on next start'}).click();
+  await expect(page.getByRole('heading',{name:'Security settings'})).toBeHidden({timeout:30_000});
+  console.log('Optional password enabled. Restarting for wrong passphrase acceptance.');
+  await stop();
+  page = await start(19321);
+  await page.locator('#vault-passphrase').waitFor({state:'visible',timeout:30_000});
+  await page.locator('#vault-passphrase').fill('incorrect-passphrase-for-test');
+  await page.getByRole('button',{name:'Unlock existing encrypted vault'}).click();
+  await expect(page.getByRole('alert')).toContainText(/Incorrect passphrase|damaged encrypted workspace/i,{timeout:30_000});
+  await page.locator('#vault-passphrase').fill(passphrase);
+  await page.getByRole('button',{name:'Unlock existing encrypted vault'}).click();
+  await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
+  await expect(page.getByTitle('Legacy smoke collection').locator('span')).toBeVisible();
+
+  console.log('Passphrase unlock succeeded. It must remain enabled after restart.');
+  await stop();
+  page = await start(19321);
+  await page.locator('#vault-passphrase').waitFor({state:'visible',timeout:30_000});
+  await page.locator('#vault-passphrase').fill(passphrase);
+  await page.getByRole('button',{name:'Unlock existing encrypted vault'}).click();
+  await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
+  await page.getByTitle('Legacy smoke collection').locator('span').waitFor({state:'visible'});
+  // The user can explicitly disable password mode and fall back to DPAPI.
+  await page.getByRole('button',{name:'Workspace actions'}).click();
+  await page.getByRole('button',{name:'Security settings'}).click();
+  await page.getByRole('button',{name:'Use Windows protection without app password'}).click();
+  await expect(page.getByRole('heading',{name:'Security settings'})).toBeHidden({timeout:30_000});
+  console.log('Password disabled by user; restarting for passwordless DPAPI acceptance.');
+  await stop();
+  page = await start(19321);
+  await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
   const afterRestart = await page.evaluate(k => localStorage.getItem(k), key);
   if (afterRestart !== null) throw new Error('Unencrypted workspace reappeared after restart');
-  console.log('PASS: installed Windows app, vault migration, wrong passphrase, restart, saved data, private history');
+  await page.getByRole('button',{name:'History',exact:true}).click();
+  await expect(page.locator('.history-item')).toHaveCount(1);
+  console.log('PASS: installed Windows MSI, default passwordless DPAPI, legacy migration, optional persistent password, wrong password, explicit disable, restart and private history');
+
 }
 
 try {

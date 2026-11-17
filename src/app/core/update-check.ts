@@ -5,7 +5,7 @@ import { isNewerRelease } from './version-utils';
 const RELEASES_API = 'https://api.github.com/repos/mehrdadbahrainy/api-studio/releases?per_page=10';
 export const RELEASES_PAGE = 'https://github.com/mehrdadbahrainy/api-studio/releases';
 export async function checkForUpdates(): Promise<string> {
-  const installed = isTauri() ? await getVersion() : '0.1.2';
+  const installed = isTauri() ? await getVersion() : '0.1.3';
   const response = await (isTauri() ? nativeFetch : fetch)(RELEASES_API, {
     headers: {Accept:'application/vnd.github+json'},
     signal:AbortSignal.timeout(10_000)

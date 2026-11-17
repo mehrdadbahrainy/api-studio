@@ -36,6 +36,19 @@ export class SecureWorkspace {
     if (migrated) removeLegacyWorkspace();
     return {vault, workspace: verified.workspace, migrated};
   }
+  static async createWithPassphrase(passphrase: string, workspace: Workspace): Promise<SecureWorkspace> {
+    if (passphrase.length < 12) throw new Error('Use a passphrase of at least 12 characters.');
+    const salt=createSalt();
+    const key=await deriveVaultKey(passphrase,salt);
+    const vault=new SecureWorkspace(key,salt);
+    await vault.save(workspace);
+    const saved=await invoke<string | null>('read_encrypted_workspace');
+    if (!saved) throw new Error('Encrypted vault verification failed.');
+    const checked=await decryptWorkspace(passphrase,saved);
+    if (JSON.stringify(checked.workspace)!==JSON.stringify(workspace))
+      throw new Error('Encrypted vault verification failed.');
+    return vault;
+  }
   save(workspace: Workspace): Promise<void> {
     // Freeze the snapshot immediately. Each write uses a fresh AES-GCM nonce.
     const snapshot = JSON.parse(JSON.stringify(workspace)) as Workspace;
@@ -57,6 +70,10 @@ export function describeVaultError(error: unknown): string {
   const text = (error instanceof Error ? error.message : String(error)).toLowerCase();
   if (text.includes('stronghold vault exists'))
     return 'A v0.1.1 Stronghold vault exists and was preserved. Restore from a private JSON export before creating a new vault. Never delete the old AppData files.';
+  if (text.includes('write failed') || text.includes('save failed') || text.includes('sync failed') || text.includes('protected workspace save verification failed'))
+    return 'Windows-protected workspace could not be saved. The previous workspace was preserved. Check storage permissions and retry.';
+  if (text.includes('protected workspace') || text.includes('windows user data protection'))
+    return 'Windows could not open the protected workspace. Existing files were preserved. Sign in to the original Windows user account or restore a private backup.';
   if (text.includes('incorrect passphrase') || text.includes('corrupted encrypted'))
     return 'Incorrect passphrase or damaged encrypted workspace. No saved data was deleted.';
   if (text.includes('at least 12')) return 'Enter a passphrase with at least 12 characters.';

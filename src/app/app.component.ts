@@ -1,12 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { Component, HostListener, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { isTauri } from '@tauri-apps/api/core';
+import { isTauri, invoke } from '@tauri-apps/api/core';
 import { SecureWorkspace, describeVaultError } from './core/secure-workspace';
+import { SystemWorkspace } from './core/system-workspace';
 import { checkForUpdates, RELEASES_PAGE } from './core/update-check';
 import { executeRequest } from './core/http-transport';
 import { loadWorkspace, saveWorkspace, downloadJson } from './core/storage';
-import { addHistory, parseWorkspace } from './core/workspace-utils';
+import { addHistory } from './core/workspace-utils';
+import { parseImportedJson } from './core/import-json';
 import { activeVariables, readableBytes, RequestValidationError } from './core/request-utils';
 import { RequestTransportError } from './core/network-errors';
 import { AuthMode, BodyMode, Collection, EditorTab, Environment, HistoryEntry, HttpMethod, HttpResult, KeyValue, RequestDraft, ResponseTab, Workspace, copyRequest, freshRequest, initialWorkspace, makeId, row } from './core/models';
@@ -20,14 +22,21 @@ export class AppComponent implements OnDestroy {
   readonly isDesktop=isTauri();
   readonly bytes=readableBytes;
   readonly releasesPage=RELEASES_PAGE;
-  readonly version='0.1.2';
+  readonly version='0.1.3';
   vaultLocked=false;
+  vaultStarting=false;
+  vaultFatal=false;
+  vaultMode:'system'|'password'='password';
+  showSecurityDialog=false;
+  securityWorking=false;
+  securityError='';
+  newVaultPassphrase='';
   vaultWorking=false;
   vaultPassphrase='';
   vaultError='';
   checkingUpdates=false;
   updateInfo='';
-  private secureWorkspace:SecureWorkspace|null=null;
+  private secureWorkspace:SecureWorkspace|SystemWorkspace|null=null;
   workspace:Workspace;
   draft:RequestDraft;
   activeRequestId:string|null=null;
@@ -51,30 +60,93 @@ export class AppComponent implements OnDestroy {
 
   constructor() {
     this.vaultLocked=this.isDesktop;
+    this.vaultStarting=this.isDesktop;
     const state=this.isDesktop ? {workspace:initialWorkspace(),warning:''} : loadWorkspace();
     this.workspace=state.workspace;this.warning=state.warning;
     const first=this.workspace.collections.flatMap(c=>c.requests)[0];
     this.draft=first?copyRequest(first):freshRequest();
     this.activeRequestId=first?.id??null;
     this.activeCollectionId=first?.collectionId??null;
+    if(this.isDesktop) void this.initializeDesktop();
   }
   ngOnDestroy():void {this.controller?.abort();if(this.notificationTimer)clearTimeout(this.notificationTimer);}
+  private openWorkspace(workspace:Workspace, vault:SecureWorkspace|SystemWorkspace, mode:'system'|'password'):void {
+    this.secureWorkspace=vault;
+    this.workspace=workspace;
+    const first=workspace.collections.flatMap(c=>c.requests)[0];
+    this.draft=first?copyRequest(first):freshRequest();
+    this.activeRequestId=first?.id??null;
+    this.activeCollectionId=first?.collectionId??null;
+    this.vaultPassphrase='';
+    this.vaultMode=mode;
+    this.vaultLocked=false;
+    this.vaultError='';
+  }
+  private async initializeDesktop():Promise<void> {
+    try {
+      const opened=await SystemWorkspace.openOrCreate();
+      if(opened) {
+        this.openWorkspace(opened.workspace,opened.vault,'system');
+        if(opened.migrated)this.inform('Previous workspace was safely migrated to Windows-protected storage.');
+      }
+      // null means either non-Windows desktop or an existing v0.1.2 password vault.
+      // Do not overwrite that vault: the user must enter the existing passphrase once.
+    } catch(error:unknown) {
+      this.vaultFatal=true;
+      this.vaultError=describeVaultError(error);
+    } finally { this.vaultStarting=false; }
+  }
   async unlockVault():Promise<void> {
-    if (!this.isDesktop || this.vaultWorking) return;
+    if (!this.isDesktop || this.vaultWorking || this.vaultStarting || this.vaultFatal)return;
     this.vaultError='';this.vaultWorking=true;
     try {
       const opened=await SecureWorkspace.unlock(this.vaultPassphrase);
-      this.secureWorkspace=opened.vault;
-      this.workspace=opened.workspace;
-      const first=this.workspace.collections.flatMap(c=>c.requests)[0];
-      this.draft=first?copyRequest(first):freshRequest();
-      this.activeRequestId=first?.id??null;
-      this.activeCollectionId=first?.collectionId??null;
-      this.vaultPassphrase='';this.vaultLocked=false;
-      if(opened.migrated)this.inform('Previous workspace was securely migrated.');
-    }catch (error: unknown) {
-      this.vaultError=describeVaultError(error);
-    }finally {this.vaultWorking=false;}
+      if(await SystemWorkspace.supported() && !await invoke<boolean>('password_mode_enabled')) {
+        // Migration is additive and verified. The v0.1.2 encrypted file remains
+        // untouched as a private recovery snapshot; Windows-protected storage
+        // becomes canonical on the next launch.
+        const system=await SystemWorkspace.create(opened.workspace);
+        this.openWorkspace(opened.workspace,system,'system');
+        this.inform('Workspace unlocked and migrated. Future Windows starts need no app password.');
+      } else {
+        this.openWorkspace(opened.workspace,opened.vault,'password');
+        if(opened.migrated)this.inform('Previous workspace was securely migrated.');
+      }
+    }catch(error:unknown){this.vaultError=describeVaultError(error);}
+    finally{this.vaultWorking=false;}
+  }
+  async enablePassphrase():Promise<void> {
+    if(!this.isDesktop || this.vaultLocked || this.securityWorking || this.newVaultPassphrase.length<12)return;
+    this.securityError='';this.securityWorking=true;
+    try {
+      const vault=await SecureWorkspace.createWithPassphrase(this.newVaultPassphrase,this.workspace);
+      // Remove the passwordless copy ONLY after a verified encrypted save.
+      await invoke('remove_protected_workspace');
+      this.secureWorkspace=vault;
+      this.vaultMode='password';
+      await invoke('set_password_mode',{enabled:true});
+      this.vaultMode='password';
+      this.newVaultPassphrase='';
+      this.showSecurityDialog=false;
+      this.inform('Passphrase protection enabled. It will be required at the next start.');
+    }catch(error:unknown){this.securityError=describeVaultError(error);}
+    finally{this.securityWorking=false;}
+  }
+  async disablePassphrase():Promise<void> {
+    if(!this.isDesktop || this.vaultLocked || this.securityWorking)return;
+    this.securityError='';this.securityWorking=true;
+    try {
+      if(!await SystemWorkspace.supported())throw new Error('Windows protection unavailable.');
+      // Disarm the opt-in marker before writing the passwordless copy. If
+      // Windows storage fails, the encrypted vault remains safe for retry.
+      await invoke('set_password_mode',{enabled:false});
+      const vault=await SystemWorkspace.create(this.workspace);
+      this.secureWorkspace=vault;
+      this.vaultMode='system';
+      this.showSecurityDialog=false;
+      this.inform('Passwordless Windows-protected storage enabled.');
+    }catch(error:unknown){this.securityError=describeVaultError(error);}
+    finally{this.securityWorking=false;}
   }
   async checkUpdates():Promise<void> {
     if (this.checkingUpdates) return;
@@ -177,16 +249,39 @@ export class AppComponent implements OnDestroy {
     downloadJson(this.workspace,'api-studio-workspace.json');this.closePopup();
   }
   async importWorkspace(event:Event):Promise<void> {
-    const input=event.target as HTMLInputElement;const file=input.files?.[0];input.value='';if(!file)return;
-    if(file.size>8_000_000){this.error='Workspace file is too large (8 MB limit).';return;}
+    const input=event.target as HTMLInputElement;
+    const file=input.files?.[0];input.value='';
+    if(!file)return;
+    if(file.size>8_000_000){this.error='Import file is too large (8 MB limit).';return;}
     try {
-      const parsed=parseWorkspace(JSON.parse(await file.text()));
-      if(!confirm('Replace your current collections, environments and history with this backup?'))return;
-      this.workspace=parsed;this.persist();const first=parsed.collections.flatMap(c=>c.requests)[0];
-      if(first)this.selectRequest(first);else this.newRequest();
-      this.inform('Workspace imported');this.error='';
-    }catch(err:unknown){this.error='Import failed: '+(err instanceof Error?err.message:String(err));}
-    finally{this.closePopup();}
+      let json:unknown;
+      try { json=JSON.parse(await file.text()); }
+      catch { throw new Error('Invalid JSON file. Export a valid JSON collection from Postman or API Studio.'); }
+      const result=parseImportedJson(json,this.workspace);
+      const native=result.kind==='native';
+      const prompt=native
+        ? 'Replace ALL current collections, environments and history with this API Studio backup? Make an export first if needed.'
+        : result.kind==='postman-collection'
+          ? 'Add '+result.importedRequests+' Postman requests in '+result.importedCollections+' collections to your existing workspace? No existing collections or history will be removed. Imported JSON may contain secrets.'
+          : 'Add this Postman environment to your existing workspace? The imported environment will become active. Imported JSON may contain secrets.';
+      if(!confirm(prompt))return;
+      const original=this.workspace;
+      this.workspace=result.workspace;
+      if(!(await this.persist())){
+        this.workspace=original;
+        this.error='Import was not saved. Existing workspace remains open; check storage permissions and retry.';
+        return;
+      }
+      const first=this.workspace.collections.flatMap(c=>c.requests).find(x=>x.id===result.firstRequestId);
+      if(first)this.selectRequest(first);
+      else if(native)this.newRequest();
+      this.error='';
+      this.warning=result.warnings.length ? 'Postman import limitations: '+result.warnings.join(' ') : '';
+      this.inform(native?'Workspace restored':result.kind==='postman-environment'
+        ? 'Postman environment added':'Postman collection imported ('+result.importedRequests+' requests)');
+    }catch(err:unknown){
+      this.error='Import failed: '+(err instanceof Error?err.message:'Unknown file format.');
+    }finally{this.closePopup();}
   }
   clearHistory():void{if(!confirm('Clear request history? Saved collections will not be changed.'))return;this.workspace.history=[];this.persist();}
   @HostListener('document:keydown',['$event']) onShortcut(event:KeyboardEvent):void {

@@ -1,136 +1,108 @@
 # API Studio
 
-> [!WARNING]
-> **Known v0.1.1 Windows startup issue:** The preview installer can crash on startup in some Windows environments. A native Windows CI test reproduces exit code `0xC0000005` on Windows Server 2025; automated installer checks did not detect this. **Do not rely on v0.1.1 for production work.** See [issue #3](https://github.com/mehrdadbahrainy/api-studio/issues/3) and use [v0.1.0 preview](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.0) if it works in your environment. Back up your workspace before changing versions.
+A lightweight, local-first REST API client built with **Angular 21** and **Tauri 2**. Designed for developers who want to open an API workspace and start sending requests without account setup.
 
-A lightweight, local-first REST client built with **Angular 21** and **Tauri 2**.
+> **Published stable:** [v0.1.2](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.2) is the latest verified public release. **v0.1.3 is unreleased** and under review in [draft PR #8](https://github.com/mehrdadbahrainy/api-studio/pull/8). Passing unit/build checks does not authorize publication: Chromium E2E, installed WebView2 migration, MSI install/uninstall, and an exact-SHA CI gate must all pass. The v0.1.1 preview had a Windows startup regression; do not use it for new projects.
 
-**No account, sync server or API key is needed to use the app itself.** Work with HTTP requests and keep your collections, environments and history on your own machine. **Desktop v0.1.2 uses a password-protected AES-256-GCM encrypted workspace file; browser preview still uses unencrypted localStorage.**
+## What it can do
 
-## Features
+The first five items below are included in published v0.1.2. **Items marked v0.1.3 are development-branch features and must not be described as already released.**
 
-- GET, POST, PUT, PATCH, DELETE, HEAD and OPTIONS
-- Headers and query parameters with enable/disable toggles
-- Request bodies: JSON, plain text and `application/x-www-form-urlencoded`, and text-only multipart FormData
-- Bearer token and Basic authentication
-- Variables such as `{{baseUrl}}` and `{{token}}` in URLs, headers, parameters and payloads
-- JSON response formatting, response headers, status, time, size and error messages
-- Collections, request editing, history, local persistence
-- Import and export the workspace as JSON
-- Browser preview, native desktop app, keyboard shortcuts
-- Included `Getting started` collection with an example request
 
-![Tauri desktop](https://img.shields.io/badge/desktop-Tauri%202-24C8DB) ![Angular](https://img.shields.io/badge/frontend-Angular%2021-DD0031) ![License](https://img.shields.io/badge/license-MIT-64748b)
+- GET, POST, PUT, PATCH, DELETE, HEAD and OPTIONS, with URL parameters and headers.
+- JSON, text, URL-encoded and **text-only** multipart FormData request bodies.
+- Bearer and Basic authentication, environment variables such as \`{{baseUrl}}\` and \`{{token}}\`.
+- Collection management, request editing, history, local persistence, JSON response formatting, status/timing/headers.
+- Import/export an API Studio workspace backup (full restore asks for explicit confirmation).
+- **Unreleased v0.1.3:** Import Postman Collection v2.0/v2.1 or Postman Environment JSON and add it to the current workspace without deleting saved collections.
+- **Unreleased v0.1.3 Windows:** Start immediately with no app password. Windows CurrentUser DPAPI protects the workspace on disk. Enable an optional passphrase in **Workspace actions → Security settings**.
+- Native desktop HTTP requests through Tauri (without browser CORS restrictions), browser-only preview for development, shortcuts and manual update check.
 
-## Download and use
+## Download
 
-**Recommended Windows release:** [API Studio v0.1.2](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.2) (x64 EXE, MSI and SHA-256 checksums). **Do not use the v0.1.1 preview for new work:** it can crash on Windows startup. Before upgrading, export a private JSON backup where possible.
+- **Published stable:** [v0.1.2 for Windows x64](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.2).
+- **v0.1.2 limitations:** Postman JSON import is not supported, and the desktop passphrase is mandatory. For those improvements use a verified v0.1.3 release only after it appears on GitHub.
+- v0.1.3 is being tested. **Do not download branch artifacts as a final installer.** Its release will appear on [GitHub Releases](https://github.com/mehrdadbahrainy/api-studio/releases) only after the exact final commit passes Windows native acceptance.
+- Installers are currently unsigned; Windows may show a SmartScreen or unverified publisher warning.
 
-The installers are unsigned, and Windows may warn about an unverified publisher. Automated QA covers Angular production build, unit tests, Chromium E2E, native Windows process startup, installed MSI WebView2 vault acceptance (migration, restart, saved data, wrong password, privacy) and MSI uninstallation. Results from CI do not prove compatibility with every Windows computer. The app requires no backend or account.
+## Getting started with the *unreleased v0.1.3 development branch*
 
-### Requirements for development
+**Not instructions for v0.1.2.** This describes expected behavior being verified in CI. Until v0.1.3 is actually released, use the public v0.1.2 installer with its mandatory passphrase and native API Studio JSON backup format.
 
-- Node.js 22.12+ (22.22+ recommended) and npm
-- Rust stable with Cargo, installed using [rustup](https://rustup.rs)
-- Tauri 2 system prerequisites for your OS (WebView2 for Windows, WebKitGTK development libraries on Linux, Xcode tools on macOS). See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
-### Run as a desktop app
+1. Launch API Studio. A clean Windows install opens without entering an app password.
+2. Select \`Getting started → Get a sample TODO\`, then click **Send**.
+3. Choose your own method and URL; add parameters, headers, body or authorization; **Save request** to a collection.
+4. Open the \`···\` workspace menu to import a Postman Collection or Environment JSON. The app detects the file type. A Postman import **adds** data; a native API Studio restore **replaces** the workspace only after confirmation.
+5. Use **Security settings** if you want an additional app passphrase. It must have 12 or more characters and will be requested on subsequent launches.
 
-```bash
-npm install
+**Shortcuts:** \`Ctrl/Cmd + Enter\` sends, \`Ctrl/Cmd + S\` saves, \`Ctrl/Cmd + N\` opens a new request.
+
+## Security and upgrade notes (v0.1.3 under validation)
+
+The following describes an implementation in the development branch, **not a security guarantee for the public v0.1.2 release**. Check the current [CI checks](https://github.com/mehrdadbahrainy/api-studio/pull/8/checks) and do not upgrade valuable workspaces without a private backup and a verified published release.
+
+
+- **Fresh Windows v0.1.3:** Workspace is encrypted at rest by Windows DPAPI under the **current Windows user account**. This avoids an app passphrase prompt but does not make data portable to another Windows profile or computer. If Windows account credentials are reset by an administrator, Windows is reinstalled, or the profile is lost, protected files may become inaccessible. **Export a private backup before major OS changes.**
+- **Existing v0.1.2:** A user with a password-protected encrypted workspace needs to enter that old passphrase **once**. Only after verification does v0.1.3 create its Windows-protected copy. The prior encrypted file is preserved as a private recovery snapshot.
+- **Existing v0.1.1:** Stronghold snapshots remain untouched and are not automatically recoverable. Keep their AppData files and a private JSON export if you have one. Never delete old files before a verified backup.
+- **Optional passphrase in v0.1.3:** When enabled, WebCrypto PBKDF2-SHA256 (600,000 rounds) and AES-256-GCM protect the native file with your chosen passphrase. The passwordless copy is removed only **after** a verified encrypted save. Removing an enabled passphrase switches back to Windows CurrentUser protection.
+- **Browser-only preview:** LocalStorage is not encrypted by Windows DPAPI. It also cannot bypass CORS. Do not store production secrets in browser-only mode.
+- **JSON export/import:** Export files are **plaintext** and can contain API keys and other secrets. Store them privately. Imported Postman scripts and tests are never executed. Unsupported auth types, script actions and file-upload fields may need manual migration.
+- **Request history:** Request bodies, credentials, sensitive headers and query values are removed, including during migration.
+- **Network:** Prefer HTTPS for credentials. API Studio allows intentionally user-entered HTTP(S) destinations, including private/local endpoints, in the native client.
+
+## Development
+
+Requirements: Node.js 22.12+ (22.22+ recommended), Rust stable, and [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for the target OS (WebView2 on Windows).
+
+\`\`\`bash
+npm install --no-audit --no-fund
 npm run desktop:dev
-```
-
-Tauri starts the Angular development server and opens the native app. In the desktop build, requests use the **Tauri HTTP plugin** and are not subject to browser CORS.
-
-### Build an installer
-
-```bash
-npm install
-npm run desktop:build
-```
-
-On success, find the installer in `src-tauri/target/release/bundle/`. Do not commit build artifacts.
-
-### Browser-only preview
-
-```bash
-npm install
+# Browser-only development:
 npm start
-```
-
-Open `http://127.0.0.1:4200`. The same UI works in a browser, but cross-origin requests still obey CORS. Use the desktop build for general-purpose API testing.
-
-### Quality checks
-
-```bash
+# Validation:
 npm run test:core
 npm run typecheck
 npm run build
-```
+npm run test:e2e
+# Native release installers:
+npm run desktop:build
+\`\`\`
 
-The included Node tests cover variable interpolation, URL and header validation, auth, JSON handling, workspace imports and history redaction. GitHub Actions runs these checks on pushes and pull requests.
+Desktop installers appear in \`src-tauri/target/release/bundle/\`. Source downloads alone are **not** installable Windows binaries.
 
-## Quick start
+### Architecture
 
-1. Launch API Studio. The **Getting started** collection contains a GET request to a public example API.
-2. Click **Send**. View status, time, size and formatted JSON response.
-3. Change the method and URL, edit query parameters and headers, then **Save request** to a collection.
-4. Use **No environment → Manage environments** to create variables and select an active environment.
-5. Use the `···` menu to import or export a workspace. The import replaces the local workspace only after confirmation.
+\`\`\`text
+Angular standalone UI (request editor, collections, settings)
+    ├─ src/app/core/request-utils.ts — request validation and auth
+    ├─ src/app/core/import-json.ts — Postman and native workspace parsing
+    ├─ src/app/core/workspace-utils.ts — safe normalization / history redaction
+    ├─ src/app/core/system-workspace.ts — Windows passwordless protected persistence
+    ├─ src/app/core/secure-workspace.ts + vault-crypto.ts — optional password mode
+    ├─ Tauri Rust commands — Windows DPAPI & atomic file persistence
+    └─ HTTP transport — Tauri native HTTP / browser fetch
+\`\`\`
 
-**Shortcuts**: `Ctrl/Cmd + Enter` send, `Ctrl/Cmd + S` save, `Ctrl/Cmd + N` new request.
+No sign-in, server-side sync or telemetry is required to use the application. More advanced capabilities including file attachments, gRPC, WebSocket, scripting, tabs and scenario execution are roadmap items; they are **not implemented** in v0.1.3.
 
-## Architecture
+### QA and releases
 
-```text
-Angular UI (request editor, collections, history)
-     │
-     ├─ Request utilities (validation, interpolation, auth, body encoding)
-     ├─ Workspace (browser WebView localStorage, import/export JSON)
-     │
-     └─ HTTP transport
-           ├─ Tauri desktop → Rust-backed HTTP client (no CORS)
-           └─ Browser preview → browser fetch (CORS applies)
-```
+CI runs fresh install, unit tests, TypeScript checks, Angular production build, Chromium E2E against a local HTTP fixture and Windows 2025 native installer build. The Windows installed MSI acceptance exercises a real WebView2 window: default passwordless opening, migration from legacy workspace, save/restart, optional passphrase, wrong-passphrase error, history privacy, and uninstall.
 
-- The `src/app/core` package keeps request preparation and state normalization separate from the Angular template.
-- No telemetry, sign-in, or remote storage is implemented.
-- Interface icons are a locally bundled subset of Lucide (ISC license included in `src/assets`).
-- Desktop permissions allow user-specified `http` and `https` destinations, including custom ports, because API testing requires arbitrary hosts.
-- Importing a collection **never automatically sends** its requests.
-- Any data inserted into the response viewer is rendered as **text**, not executable HTML.
+**Release gate:** Only a successful CI run on the exact current \`main\` SHA may publish v0.1.3 installers; publication reuses the exact tested MSI/EXE and attaches SHA-256 checksums. No suite can prove that software has zero defects on every Windows system.
 
-### Security and limitations
+For the planned product roadmap (through v0.4.0), see the [project document](https://docs.google.com/document/d/1c_9gC-7vhMQzgogBgm7DevEEXRd6-hEq9JKLcoTYneg/edit). User-facing API Scenario Runner and CLI/JUnit integration remain separate future milestones.
 
-- **Secrets (desktop v0.1.2 candidate)**: saved requests, tokens and environment values are encrypted with WebCrypto AES-256-GCM using a PBKDF2-SHA256 key derived from a user-chosen passphrase and random per-workspace salt. Tauri only stores ciphertext in the app-local data folder. No password recovery is provided. The unencrypted v0.1.0 data is removed only after encrypted save succeeds. Existing v0.1.1 Stronghold snapshots are detected and never overwritten automatically; import a private JSON backup for migration. Browser preview remains unencrypted. JSON exports may contain credentials and must be kept private.
-- **History**: no body content, URL query values, form values, credentials or sensitive headers are retained. Legacy history is sanitized on import/migration. Replaying exact requests from history requires re-entering stripped data.
-- **HTTP**: sending credentials to an `http://` URL is unencrypted. Use HTTPS for sensitive APIs.
-- **Untrusted APIs**: desktop requests can reach arbitrary HTTP(S) addresses, including local services, by design. Only send requests to endpoints you trust. Imported workspaces do not execute automatically.
-- **Response preview**: text is displayed up to 5 MiB; large and binary responses do not have a full preview. File attachments, gRPC, WebSocket, multipart upload, scripts/tests, synchronization and tabs are out of scope for v0.1.
-- **Installer signing**: the release workflow does not sign Windows/macOS binaries, so OS warnings are possible. The v0.1.1 CI adds an MSI install/uninstall smoke test on a clean Windows runner. Generated release drafts should be reviewed before publishing.
-- **Source build**: the source can be built on supported platforms, but the ZIP is not itself a ready-to-run installer.
-- **Updates**: the in-app Check for updates action compares installed version with public GitHub Releases, without downloading or automatically installing anything. Signed automatic updates require additional setup.
+## Project records and decisions
 
-## Release workflow
+- [Project management and roadmap through v0.4.0](https://docs.google.com/document/d/1c_9gC-7vhMQzgogBgm7DevEEXRd6-hEq9JKLcoTYneg/edit) — product decisions, evidence, risk log, milestones and acceptance criteria.
+- [v0.1.3 milestone / acceptance issue #7](https://github.com/mehrdadbahrainy/api-studio/issues/7) and [draft PR #8](https://github.com/mehrdadbahrainy/api-studio/pull/8) — implementation, CI and release blockers.
+- [Contributing](CONTRIBUTING.md) — validation commands and policy for safe feature development.
 
-The CI workflow runs unit tests, browser E2E, Angular build, Windows desktop packaging, installed Windows WebView2 acceptance and clean Windows MSI installation/removal checks. The `.github/workflows/publish-v0.1.2.yml` workflow publishes v0.1.2 only after the exact main commit passes all CI gates, reusing the tested Windows installers and generating SHA-256 checksums. The previous `publish-v0.1.1.yml` produced the known-broken preview.
-
-For future version tags, the `.github/workflows/release.yml` workflow creates a draft cross-platform release for review.
+The product owner controls direction and release acceptance. Previous autonomous project-manager delegation is inactive; historical notes are retained in Drive only for traceability. New features and material roadmap changes require approval. No background agent is implicitly running because documents exist.
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
-
-## v0.1.1 notes
-
-- Desktop encrypted vault encrypts saved workspace and environment values with a user-chosen passphrase; browser preview does not use this vault.
-- Legacy workspace migration only removes the unencrypted storage entry after an encrypted save has succeeded. Export a private backup of v0.1.0 data before updating.
-- History removes request bodies, query values, credentials and sensitive headers. Replaying sanitized entries may require re-entering parameters.
-- Requests support cancellation, a 30-second timeout and safer network error messages.
-- Manual update checks compare installed version with public releases; the application does not auto-install updates.
-- **Verification limit:** CI tests packaging, browser E2E and MSI install/uninstall. A user-driven desktop UI test of Stronghold unlock and migration is still recommended. This is an unsigned preview release.
-
-## v0.1.2 Windows startup fix
-
-Native application startup on Windows Server 2025 reproducibly crashes with Stronghold initialization in v0.1.1. The v0.1.2 fix removes the crashing native plugin while keeping the desktop workspace encrypted at rest using WebCrypto AES-256-GCM and writing only encrypted data through narrowly scoped native Rust commands. The old v0.1.1 Stronghold file is never modified; if present, the new app blocks silent migration to prevent losing inaccessible data. A private JSON export from a working v0.1.1 app can be imported later. The v0.1.2 publishing workflow requires unit tests, browser E2E, installed-app WebView2 acceptance, clean install and uninstall on a Windows CI runner.

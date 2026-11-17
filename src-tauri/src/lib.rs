@@ -1,3 +1,4 @@
+mod system_vault;
 use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
@@ -64,7 +65,14 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             read_encrypted_workspace,
             write_encrypted_workspace,
-            legacy_stronghold_exists
+            legacy_stronghold_exists,
+            system_vault::is_system_vault_supported,
+            system_vault::protected_workspace_exists,
+            system_vault::read_protected_workspace,
+            system_vault::write_protected_workspace,
+            system_vault::remove_protected_workspace,
+            system_vault::password_mode_enabled,
+            system_vault::set_password_mode
         ])
         .run(tauri::generate_context!())
         .expect("error running API Studio");
