@@ -42,7 +42,9 @@ export function freshRequest(): RequestDraft {
 }
 export function initialWorkspace(): Workspace {
   const sample = freshRequest(); sample.name = 'Get a sample TODO';
-  const collection: Collection = { id: makeId(), name: 'Getting started', requests: [] };
+  // A stable seeded ID keeps UI-only Collection disclosure preferences valid
+  // across fresh browser previews that have not yet saved a workspace.
+  const collection: Collection = { id: 'api-studio-getting-started', name: 'Getting started', requests: [] };
   sample.collectionId = collection.id; collection.requests.push(sample);
   return { version: 1, collections: [collection], environments: [{ id: makeId(), name: 'Local development', variables: [row('baseUrl', 'http://localhost:3000'), row('token', '')] }], selectedEnvironmentId: null, history: [] };
 }
