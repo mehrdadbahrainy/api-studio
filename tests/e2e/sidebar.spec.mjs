@@ -81,7 +81,7 @@ test('compact navigation rail expands the editor and survives reload',async({pag
   await page.getByRole('button',{name:'Collapse sidebar'}).click();
   await expect(page.locator('.sidebar')).toHaveClass(/is-collapsed/);
   await expect.poll(()=>sidebarWidth(page)).toBeLessThan(before-100);
-  await expect(page.getByRole('button',{name:'History'})).toBeVisible();
+  await expect(page.getByRole('tab',{name:'History'})).toBeVisible();
   await page.reload();
   await expect(page.locator('.sidebar')).toHaveClass(/is-collapsed/);
   await page.getByRole('tab',{name:'Collections'}).click();
