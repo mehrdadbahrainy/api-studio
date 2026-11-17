@@ -70,6 +70,8 @@ export function describeVaultError(error: unknown): string {
   const text = (error instanceof Error ? error.message : String(error)).toLowerCase();
   if (text.includes('stronghold vault exists'))
     return 'A v0.1.1 Stronghold vault exists and was preserved. Restore from a private JSON export before creating a new vault. Never delete the old AppData files.';
+  if (text.includes('write failed') || text.includes('save failed') || text.includes('sync failed') || text.includes('protected workspace save verification failed'))
+    return 'Windows-protected workspace could not be saved. The previous workspace was preserved. Check storage permissions and retry.';
   if (text.includes('protected workspace') || text.includes('windows user data protection'))
     return 'Windows could not open the protected workspace. Existing files were preserved. Sign in to the original Windows user account or restore a private backup.';
   if (text.includes('incorrect passphrase') || text.includes('corrupted encrypted'))
