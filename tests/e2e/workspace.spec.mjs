@@ -25,7 +25,7 @@ test('GET sends to a real local HTTP service and displays status, headers, body 
   expect(await requestResult(page)).toMatchObject({ method: 'GET', path: '/echo', query: { kind: 'get' } });
   await page.locator('.response-tabs').getByRole('button', { name: /Headers/ }).click();
   await expect(page.locator('.response-headers')).toContainText('x-test-server');
-  await page.getByRole('button', { name: 'History', exact: true }).click();
+  await page.getByRole('tab', { name: 'History', exact: true }).click();
   await expect(page.locator('.history-item')).toHaveCount(1);
   await expect(page.locator('.history-item')).toContainText('200');
 });
