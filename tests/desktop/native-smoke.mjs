@@ -96,11 +96,15 @@ async function main() {
     // stored localStorage but had no Windows protected native workspace.
     await window.__TAURI_INTERNALS__.invoke('remove_protected_workspace');
   }, [key,legacy]);
-  console.log('Seeded legacy workspace; restarting for real native DPAPI migration');
-  await stop();
-  page = await start(19321);
+  // The installed WebView2 flushes localStorage asynchronously. Killing the
+  // process immediately after injection can lose the legacy fixture before
+  // migration starts. Reload within the *installed* WebView2 first, so the
+  // actual Angular/Tauri migration executes against the fixture. Subsequent
+  // process restarts validate DPAPI persistence separately.
+  console.log('Seeded legacy workspace; reloading installed WebView2 to perform native DPAPI migration');
+  await page.reload();
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
-  await expect(page.getByTitle('Legacy smoke collection').locator('span')).toBeVisible();
+  await expect(page.getByTitle('Legacy smoke collection').locator('span')).toBeVisible({timeout:30_000});
   const afterMigration = await page.evaluate(k => localStorage.getItem(k), key);
   if (afterMigration !== null) throw new Error('Unencrypted legacy workspace was not removed after successful DPAPI migration');
   const leaked = await page.evaluate(k => Object.values({...localStorage}).join('\n').includes(k), legacyToken);
