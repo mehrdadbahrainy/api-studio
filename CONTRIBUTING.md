@@ -1,58 +1,34 @@
 # Contributing to API Studio
 
-API Studio is a local-first Angular 21 + Tauri 2 REST client. We welcome focused issues and pull requests that improve real user workflows without compromising saved workspaces, security or desktop reliability.
+API Studio is a local-first Angular + Tauri REST client. Focus on usability, predictable behavior, secure local persistence and reliable Windows desktop installs.
 
-## Project sources of truth
+## Project references
 
-- [Product decisions, UX principles and roadmap through v0.4.0](https://docs.google.com/document/d/1c_9gC-7vhMQzgogBgm7DevEEXRd6-hEq9JKLcoTYneg/edit) — plans and acceptance criteria.
-- [GitHub Issues](https://github.com/mehrdadbahrainy/api-studio/issues) — execution and defects.
-- [Pull Requests and checks](https://github.com/mehrdadbahrainy/api-studio/pulls) — code review, test evidence and pending work.
-- [Releases](https://github.com/mehrdadbahrainy/api-studio/releases) — only published, installable builds.
+- [Latest release — v0.1.4](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.4) · [Changelog](CHANGELOG.md) · [Persian quickstart](QUICKSTART.fa.md)
+- [Issues](https://github.com/mehrdadbahrainy/api-studio/issues) for reproducible bugs and approved work; [Pull Requests](https://github.com/mehrdadbahrainy/api-studio/pulls) for review and evidence.
+- [Roadmap through v0.4.0](https://docs.google.com/document/d/1c_9gC-7vhMQzgogBgm7DevEEXRd6-hEq9JKLcoTYneg/edit) for product decisions and acceptance criteria. Product-direction changes require the owner's approval.
 
-The product owner approves new product ideas and significant changes to milestones, security posture or user-facing direction. Historic autonomous project-manager notes are archived, not active delegation.
+## Pull request checklist
 
-## Development workflow
+1. Reference an issue and describe the user journey, acceptance criteria and known limitations.
+2. Keep changes scoped; add unit tests for parsers/storage/request behavior and Playwright E2E for visible workflows.
+3. Run `npm install --no-audit --no-fund`, `npm run test:core`, `npm run typecheck`, `npm run build`, and `npm run test:e2e`.
+4. For desktop/security/upgrade behavior, use the CI Windows native MSI + installed WebView2/restart/uninstall tests before merging.
+5. Summarize risks to existing workspaces. Verify saved data and migrations; never treat an MSI build alone as proof of usability.
+6. Keep docs, version strings and release notes consistent; do not label unverified branch artifacts as stable releases.
 
-1. Open or reference an Issue with a user scenario, scope, acceptance criteria and known migration/data-safety risks.
-2. Branch from a known baseline and keep changes limited to the approved scope. Do not update `main` with unreviewed experimental features.
-3. Add unit/regression tests for parsers, storage, request behavior and error handling. Use representative Postman and workspace fixtures rather than relying only on mock examples.
-4. Cover visible UX behavior with Playwright and include negative cases (invalid input, cancellation, storage failure, save/restart).
-5. Open a PR summarizing behavior, screenshots when UI changes, tests performed, known limitations, migration risks and exact evidence links.
-6. Merge only after review and successful required CI checks; a successful build is not proof of a working installed desktop application.
+## Security and compatibility
 
-## Local verification
-
-```bash
-npm install --no-audit --no-fund
-npm run test:core
-npm run typecheck
-npm run build
-npm run test:e2e
-```
-
-Desktop build (Rust and Tauri prerequisites required):
-
-```bash
-npm run desktop:build
-```
-
-The CI workflow also builds real Windows installers and checks process startup and **installed MSI WebView2** behavior on Windows Server 2025. This includes the primary workspace and upgrade journeys, not just Angular in a browser.
-
-## Data and security requirements
-
-- Import is **not** execution: do not run imported Postman scripts or requests automatically. Clearly report unsupported auth/body modes and skip unsupported file attachments safely.
-- Importing Postman Collection or Environment must preserve current Collections, History and settings. Native API Studio backup restore must require explicit replacement confirmation.
-- Never delete a legacy workspace before a verified readback of the migrated copy. Add tests for wrong passwords, failed writes, interruption and rollback. Keep old Stronghold and encrypted vault files intact unless a verified, approved cleanup is safe.
-- Never log access tokens, passwords, private paths, raw request bodies or sensitive environment values. JSON workspace exports are plaintext and may contain secrets.
-- Do not add telemetry, a mandatory account, an external service dependency, or runtime CDN assets without approval and a privacy/security review.
-- Treat Windows DPAPI as tied to the user's Windows security context, **not** as a portable backup. Tell users to keep private backups before OS or account migration.
+- Never execute imported Postman scripts or API requests automatically. Postman imports must preserve existing Workspace data and clearly warn on unsupported formats.
+- Never log access tokens, passwords, sensitive headers or raw request bodies. JSON exports are unencrypted; DPAPI protection is bound to a Windows user, not portable.
+- Never delete previous vaults before verified migration. Keep fallback behavior testable, including wrong password, disk failure and interrupted writes.
+- Do not add telemetry, mandatory accounts, cloud dependencies or runtime CDN assets without product/security review.
+- For additional native Postman File Picker and real v0.1.2-vault upgrade testing, see [QA issue #9](https://github.com/mehrdadbahrainy/api-studio/issues/9).
 
 ## Release policy
 
-- The latest verified published release is **[v0.1.3](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.3)** (Windows x64, EXE/MSI and SHA256SUMS). Draft branch artifacts must not be treated as official installers.
-- The v0.1.3 milestone is tracked in [Issue #7](https://github.com/mehrdadbahrainy/api-studio/issues/7) and [merged PR #8](https://github.com/mehrdadbahrainy/api-studio/pull/8). All four CI jobs passed at release commit `b8dfc33148508111d0916cae2037a5e259d85f2e`: [CI #44043330519](https://github.com/mehrdadbahrainy/api-studio/actions/runs/44043330519). Publication also passed: [#44044496663](https://github.com/mehrdadbahrainy/api-studio/actions/runs/44044496663).
-- Keep version strings aligned in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` and displayed UI/docs.
-- A stable release must use the **exact commit** whose CI passed all gates: unit, typecheck, production Angular build, Chromium E2E, native executable, installed MSI WebView2 acceptance and uninstall.
-- Publish matching Windows EXE/MSI installers, SHA256 checksums, release notes, supported-platform scope, migration guidance and explicit limitations. If any P0 gate fails, **do not publish**.
+Stable releases must use the **exact source SHA** that passed unit checks, TypeScript/Angular, browser E2E, Windows installer build and installed MSI/WebView2 acceptance. Attach Windows x64 EXE, MSI, SHA256SUMS and clear security/upgrade notes. Keep past release binaries/tags unchanged.
 
-The differentiating future roadmap remains a *script-free API Scenario Runner*, followed by Git-friendly scenario files and running the same tests through CLI, JUnit XML and GitHub Actions. Those are planned features, not implemented in v0.1.3.
+[v0.1.4 full CI](https://github.com/mehrdadbahrainy/api-studio/actions/runs/44063915754) and [release workflow](https://github.com/mehrdadbahrainy/api-studio/actions/runs/44065235512) both succeeded. Additional releases must repeat the gates. CI does not guarantee compatibility with every Windows machine.
+
+The planned script-free API Scenario Runner and later Git/CLI/JUnit/Actions support are **not** features of v0.1.4.
