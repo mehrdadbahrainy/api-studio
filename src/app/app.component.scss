@@ -124,3 +124,13 @@
   .sidebar-heading-actions .subtle-icon{width:29px;height:29px}
 }
 @media(prefers-reduced-motion:reduce){.app-shell,.collection-chevron.ui-icon,.collection-title,.request-nav,.resize-grip{transition:none!important}}
+
+/* Align all icon-only controls on their real vector boxes, not text baselines. */
+.remove-row,.modal-close,.alert button[aria-label^="Dismiss"]{display:inline-flex;align-items:center;justify-content:center;gap:0;padding:0;line-height:1}
+.remove-row .ui-icon,.modal-close .ui-icon,.alert button .ui-icon{width:17px;height:17px;flex:0 0 17px}
+.remove-row:hover{background:#fff1f3;border-radius:6px}
+.modal-close{width:34px;height:34px}
+.alert button[aria-label^="Dismiss"]{flex:0 0 27px;width:27px;height:27px;border-radius:6px}
+.alert button[aria-label^="Dismiss"]:hover{background:#0000000a}
+.environment-button .downchevron.ui-icon{width:15px;height:15px;flex:0 0 15px;color:#97a2b6}
+.add-row-button .ui-icon{width:16px;height:16px;flex:0 0 16px}
