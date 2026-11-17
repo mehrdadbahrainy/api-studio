@@ -13,7 +13,7 @@ test('history does not store query values or request bodies',async ({page})=>{
   const saved = await page.evaluate(()=>localStorage.getItem('api-studio.workspace.v1'));
   expect(saved).not.toContain('VERY_PRIVATE');
   expect(saved).not.toContain('ALSO_PRIVATE');
-  await page.getByRole('button',{name:'History',exact:true}).click();
+  await page.getByRole('tab',{name:'History',exact:true}).click();
   await expect(page.locator('.history-item')).toHaveCount(1);
 });
 test('network failure gives actionable guidance without repeating secrets',async ({page})=>{

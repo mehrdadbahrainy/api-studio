@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { isTauri, invoke } from '@tauri-apps/api/core';
 import { SecureWorkspace, describeVaultError } from './core/secure-workspace';
 import { SystemWorkspace } from './core/system-workspace';
+import { COLLAPSED_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth, readSidebarPreferences, writeSidebarPreferences } from './core/sidebar-state';
 import { checkForUpdates, RELEASES_PAGE } from './core/update-check';
 import { executeRequest } from './core/http-transport';
 import { loadWorkspace, saveWorkspace, downloadJson } from './core/storage';
@@ -22,7 +23,8 @@ export class AppComponent implements OnDestroy {
   readonly isDesktop=isTauri();
   readonly bytes=readableBytes;
   readonly releasesPage=RELEASES_PAGE;
-  readonly version='0.1.3';
+  readonly version='0.1.4';
+  readonly collapsedSidebarWidth=COLLAPSED_SIDEBAR_WIDTH;
   vaultLocked=false;
   vaultStarting=false;
   vaultFatal=false;
@@ -44,6 +46,10 @@ export class AppComponent implements OnDestroy {
   editorTab:EditorTab='params';
   responseTab:ResponseTab='body';
   sidebarTab:'collections'|'history'='collections';
+  sidebarWidth=DEFAULT_SIDEBAR_WIDTH;
+  sidebarCollapsed=false;
+  isResizingSidebar=false;
+  collapsedCollectionIds=new Set<string>();
   response:HttpResult|null=null;
   running=false;
   error='';
@@ -59,6 +65,10 @@ export class AppComponent implements OnDestroy {
   private notificationTimer:ReturnType<typeof setTimeout>|null=null;
 
   constructor() {
+    const savedLayout=readSidebarPreferences(typeof localStorage==='undefined'?null:localStorage);
+    this.sidebarWidth=clampSidebarWidth(savedLayout.width,typeof window==='undefined'?1440:window.innerWidth);
+    this.sidebarCollapsed=savedLayout.collapsed;
+    this.collapsedCollectionIds=new Set(savedLayout.collapsedCollectionIds);
     this.vaultLocked=this.isDesktop;
     this.vaultStarting=this.isDesktop;
     const state=this.isDesktop ? {workspace:initialWorkspace(),warning:''} : loadWorkspace();
@@ -69,7 +79,7 @@ export class AppComponent implements OnDestroy {
     this.activeCollectionId=first?.collectionId??null;
     if(this.isDesktop) void this.initializeDesktop();
   }
-  ngOnDestroy():void {this.controller?.abort();if(this.notificationTimer)clearTimeout(this.notificationTimer);}
+  ngOnDestroy():void {this.controller?.abort();if(this.notificationTimer)clearTimeout(this.notificationTimer);this.isResizingSidebar=false;}
   private openWorkspace(workspace:Workspace, vault:SecureWorkspace|SystemWorkspace, mode:'system'|'password'):void {
     this.secureWorkspace=vault;
     this.workspace=workspace;
@@ -165,8 +175,59 @@ export class AppComponent implements OnDestroy {
   get filteredCollections():Collection[] {
     const q=this.filter.trim().toLowerCase();
     if(!q)return this.workspace.collections;
-    return this.workspace.collections.map(c=>({...c,requests:c.requests.filter(r=>(r.name+' '+r.method+' '+r.url).toLowerCase().includes(q))})).filter(c=>c.requests.length||c.name.toLowerCase().includes(q));
+    return this.workspace.collections.map(c=>c.name.toLowerCase().includes(q)?c:{...c,requests:c.requests.filter(r=>(r.name+' '+r.method+' '+r.url).toLowerCase().includes(q))}).filter(c=>c.requests.length||c.name.toLowerCase().includes(q));
   }
+
+  /** UI state never enters encrypted Workspace JSON or its backups. */
+  private rememberLayout():void {
+    writeSidebarPreferences(typeof localStorage==='undefined'?null:localStorage,{
+      width:this.sidebarWidth,collapsed:this.sidebarCollapsed,
+      collapsedCollectionIds:[...this.collapsedCollectionIds]
+    });
+  }
+  toggleSidebar():void { this.sidebarCollapsed=!this.sidebarCollapsed;this.rememberLayout(); }
+  setSidebarTab(tab:'collections'|'history'):void {
+    this.sidebarTab=tab;
+    if(this.sidebarCollapsed)this.sidebarCollapsed=false;
+    this.rememberLayout();
+  }
+  isCollectionExpanded(id:string):boolean { return !!this.filter.trim() || !this.collapsedCollectionIds.has(id); }
+  toggleCollection(id:string):void {
+    if(this.collapsedCollectionIds.has(id))this.collapsedCollectionIds.delete(id);
+    else this.collapsedCollectionIds.add(id);
+    this.rememberLayout();
+  }
+  setAllCollectionsExpanded(expanded:boolean):void {
+    this.collapsedCollectionIds=expanded?new Set<string>():new Set(this.workspace.collections.map(c=>c.id));
+    this.rememberLayout();
+  }
+  beginSidebarResize(event:PointerEvent):void {
+    if(event.button!==0 || this.sidebarCollapsed || (typeof window!=='undefined' && window.innerWidth<=760))return;
+    this.isResizingSidebar=true;
+    event.preventDefault();
+  }
+  @HostListener('document:pointermove',['$event'])
+  onSidebarPointerMove(event:PointerEvent):void {
+    if(!this.isResizingSidebar)return;
+    this.sidebarWidth=clampSidebarWidth(event.clientX,window.innerWidth);
+    event.preventDefault();
+  }
+  @HostListener('document:pointerup')
+  @HostListener('document:pointercancel')
+  endSidebarResize():void { if(!this.isResizingSidebar)return;this.isResizingSidebar=false;this.rememberLayout(); }
+  resizeSidebarFromKeyboard(event:KeyboardEvent):void {
+    const keys=['ArrowLeft','ArrowRight','Home','End'];
+    if(!keys.includes(event.key))return;
+    event.preventDefault();
+    if(this.sidebarCollapsed)this.sidebarCollapsed=false;
+    if(event.key==='Home')this.sidebarWidth=228;
+    else if(event.key==='End')this.sidebarWidth=480;
+    else this.sidebarWidth+=event.key==='ArrowRight'?20:-20;
+    this.sidebarWidth=clampSidebarWidth(this.sidebarWidth,window.innerWidth);
+    this.rememberLayout();
+  }
+  @HostListener('window:resize')
+  onWindowResize():void { if(typeof window!=='undefined')this.sidebarWidth=clampSidebarWidth(this.sidebarWidth,window.innerWidth); }
   trackId(_index:number,item:{id:string}):string{return item.id;}
   closePopup():void{this.showMenu=false;}
   inform(text:string):void {this.notice=text;if(this.notificationTimer)clearTimeout(this.notificationTimer);this.notificationTimer=setTimeout(()=>this.notice='',2800);}
@@ -192,11 +253,12 @@ export class AppComponent implements OnDestroy {
   createCollection():void {
     const name=this.newCollectionName.trim();if(!name)return;
     const collection:Collection={id:makeId(),name,requests:[]};
-    this.workspace.collections.push(collection);this.activeCollectionId=collection.id;this.newCollectionName='';this.showCreateCollection=false;this.persist();this.inform('Collection created');
+    this.workspace.collections.push(collection);this.collapsedCollectionIds.delete(collection.id);this.activeCollectionId=collection.id;this.newCollectionName='';this.showCreateCollection=false;this.persist();this.inform('Collection created');
   }
   deleteCollection(collection:Collection):void {
     if(!window.confirm(`Delete "${collection.name}" and all ${collection.requests.length} saved requests?`))return;
     this.workspace.collections=this.workspace.collections.filter(c=>c.id!==collection.id);
+    this.collapsedCollectionIds.delete(collection.id);this.rememberLayout();
     if(this.activeCollectionId===collection.id){this.newRequest();}
     this.persist();this.inform('Collection removed');
   }
