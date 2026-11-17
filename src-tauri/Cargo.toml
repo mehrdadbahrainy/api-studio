@@ -1,6 +1,6 @@
 [package]
 name = "api_studio"
-version = "0.1.3"
+version = "0.1.4"
 description = "Local-first REST API client"
 authors = ["Community contributors"]
 license = "MIT"
