@@ -49,8 +49,8 @@ The CI workflow also builds real Windows installers and checks process startup a
 
 ## Release policy
 
-- Stable publicly available version is **v0.1.2** until a verified v0.1.3 GitHub Release exists; draft branch artifacts are not public releases.
-- The v0.1.3 work is in [Issue #7](https://github.com/mehrdadbahrainy/api-studio/issues/7) / [draft PR #8](https://github.com/mehrdadbahrainy/api-studio/pull/8). Do not close the issue or mark the PR complete until Import, DPAPI, optional passphrase, legacy migration and Windows installer E2E are all accepted.
+- The latest verified published release is **[v0.1.3](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.3)** (Windows x64, EXE/MSI and SHA256SUMS). Draft branch artifacts must not be treated as official installers.
+- The v0.1.3 milestone is tracked in [Issue #7](https://github.com/mehrdadbahrainy/api-studio/issues/7) and [merged PR #8](https://github.com/mehrdadbahrainy/api-studio/pull/8). All four CI jobs passed at release commit `b8dfc33148508111d0916cae2037a5e259d85f2e`: [CI #44043330519](https://github.com/mehrdadbahrainy/api-studio/actions/runs/44043330519). Publication also passed: [#44044496663](https://github.com/mehrdadbahrainy/api-studio/actions/runs/44044496663).
 - Keep version strings aligned in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` and displayed UI/docs.
 - A stable release must use the **exact commit** whose CI passed all gates: unit, typecheck, production Angular build, Chromium E2E, native executable, installed MSI WebView2 acceptance and uninstall.
 - Publish matching Windows EXE/MSI installers, SHA256 checksums, release notes, supported-platform scope, migration guidance and explicit limitations. If any P0 gate fails, **do not publish**.
