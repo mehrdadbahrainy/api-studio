@@ -134,3 +134,56 @@
 .alert button[aria-label^="Dismiss"]:hover{background:#0000000a}
 .environment-button .downchevron.ui-icon{width:15px;height:15px;flex:0 0 15px;color:#97a2b6}
 .add-row-button .ui-icon{width:16px;height:16px;flex:0 0 16px}
+
+
+/* v0.2.0: independent request-tab workspace */
+.open-request-tabs{
+  position:relative;display:flex;align-items:stretch;gap:5px;
+  min-height:47px;padding:7px 18px 0;overflow-x:auto;overflow-y:hidden;
+  border-bottom:1px solid #e4e8f1;background:#f3f5fb;
+  scrollbar-width:thin;scrollbar-color:#bdc6d9 transparent;
+}
+.open-request-tab{
+  display:flex;align-items:center;min-width:150px;max-width:260px;
+  flex:0 1 225px;border:1px solid #dee4ef;border-bottom-color:transparent;
+  border-radius:9px 9px 0 0;background:#e9edf6;color:#65738e;
+  transition:background 140ms,border-color 140ms;overflow:hidden;
+}
+.open-request-tab.active{
+  color:#26334b;background:#fff;border-color:#dce2ee;border-bottom-color:#fff;
+  box-shadow:0 -2px 10px #1b2c4a08;
+}
+.open-request-tab:hover:not(.active){background:#e2e6f2}
+.open-tab-select{
+  display:flex;align-items:center;gap:8px;flex:1;min-width:0;
+  min-height:36px;padding:0 6px 0 13px;background:transparent;
+  color:inherit;text-align:left;
+}
+.tab-name{min-width:0;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px;font-weight:700}
+.tab-method{flex:0 0 auto;font-size:9px;letter-spacing:.15px;font-weight:850;color:#268e70}
+.tab-method.post{color:#b57a2d}.tab-method.put{color:#6284ca}.tab-method.delete{color:#c55862}
+.tab-method.patch{color:#9264c6}
+.unsaved-dot{flex:0 0 7px;width:7px;height:7px;border-radius:50%;background:#ef9f36;box-shadow:0 0 0 2px #fff1d8}
+.close-request-tab,.new-request-tab{
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 27px;
+  width:27px;height:27px;padding:0;border-radius:6px;background:transparent;color:#8c97aa;
+}
+.close-request-tab{margin-right:5px}
+.close-request-tab:hover,.new-request-tab:hover{background:#e3e7f4;color:#4b42c9}
+.close-request-tab .ui-icon,.new-request-tab .ui-icon{width:14px;height:14px;flex:0 0 14px}
+.new-request-tab{flex:0 0 34px;width:34px;height:34px;margin:2px 1px 0}
+.draft-indicator{
+  display:inline-flex;vertical-align:middle;margin-left:12px;padding:5px 8px;
+  border:1px solid #d7eee6;border-radius:6px;background:#f0faf6;
+  color:#3a906e;font-size:11px;font-weight:750;letter-spacing:0;
+}
+.draft-indicator.is-dirty{border-color:#f5dfbb;background:#fff8e8;color:#9d722a}
+.close-tab-dialog{max-width:485px}
+.close-tab-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.close-discard{color:#a44752!important;border-color:#efc9ce!important}
+@media(max-width:760px){
+  .open-request-tabs{padding:5px 12px 0;min-height:46px}
+  .open-request-tab{flex:0 0 190px;min-width:155px}
+  .draft-indicator{margin-left:0;margin-top:9px}
+  .headline h1{display:flex;align-items:flex-start;flex-wrap:wrap;gap:4px}
+}
