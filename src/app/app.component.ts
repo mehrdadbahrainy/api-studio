@@ -256,6 +256,7 @@ export class AppComponent implements OnDestroy {
     this.rememberOpenRequestTabs();
   }
   private openDraftTab(draft:RequestDraft,savedId:string|null,collectionId:string|null):void {
+    if(this.running){this.inform('Finish or cancel the running request before opening another tab.');return;}
     if(this.requestTabs.length>=MAX_EDITOR_TABS){this.inform('Close a tab before opening another (12 tab limit).');return;}
     this.syncActiveRequestTab();
     const tab=this.newTab(draft,savedId,collectionId);
@@ -402,22 +403,32 @@ export class AppComponent implements OnDestroy {
   createCollection():void {
     const name=this.newCollectionName.trim();if(!name)return;
     const collection:Collection={id:makeId(),name,requests:[]};
-    this.workspace.collections.push(collection);this.collapsedCollectionIds.delete(collection.id);this.activeCollectionId=collection.id;this.newCollectionName='';this.showCreateCollection=false;this.persist();this.inform('Collection created');
+    this.workspace.collections.push(collection);this.collapsedCollectionIds.delete(collection.id);this.onCollectionSelection(collection.id);this.newCollectionName='';this.showCreateCollection=false;this.persist();this.inform('Collection created');
   }
   deleteCollection(collection:Collection):void {
-    if(!window.confirm(`Delete "${collection.name}" and all ${collection.requests.length} saved requests?`))return;
+    if(this.running){this.inform('Finish the running request first.');return;}
+    if(!window.confirm(`Delete "${collection.name}" and all ${collection.requests.length} saved requests? Unsaved tabs in this Collection will also be discarded.`))return;
+    this.syncActiveRequestTab();
+    const removedIds=new Set(collection.requests.map(r=>r.id));
     this.workspace.collections=this.workspace.collections.filter(c=>c.id!==collection.id);
     this.collapsedCollectionIds.delete(collection.id);this.rememberLayout();
-    // Deleting a Collection is explicitly confirmed. Remove associated editor tabs
-    // to avoid preserving an orphaned draft over a deleted request.
-    this.requestTabs=this.requestTabs.filter(t=>t.collectionId!==collection.id);
-    this.restoreRequestTabs();
-    this.persist();this.inform('Collection removed');
+    this.requestTabs=this.requestTabs.filter(t=>t.collectionId!==collection.id && (!t.savedId || !removedIds.has(t.savedId)));
+    if(!this.requestTabs.length){
+      const first=this.workspace.collections.flatMap(c=>c.requests)[0];
+      this.requestTabs.push(first?this.newTab(first,first.id,first.collectionId):this.newTab(freshRequest(),null,this.workspace.collections[0]?.id??null));
+    }
+    if(!this.requestTabs.some(t=>t.key===this.activeTabKey))this.showRequestTab(this.requestTabs[0]);
+    this.rememberOpenRequestTabs();
+    void this.persist();this.inform('Collection removed');
   }
   async saveRequest():Promise<void> {
     if(!this.draft.url.trim()){this.error='Enter a request URL before saving.';return;}
     const destination=this.workspace.collections.find(c=>c.id===this.activeCollectionId)??this.workspace.collections[0];
     if(!destination){this.showCreateCollection=true;this.inform('Create a collection before saving.');return;}
+    const previousCollections=this.workspace.collections.map(c=>({id:c.id,requests:c.requests.slice()}));
+    const previousDraft=this.draft;
+    const previousRequestId=this.activeRequestId;
+    const previousDestinationId=this.activeCollectionId;
     const copy=copyRequest(this.draft);copy.collectionId=destination.id;
     const previouslySaved=this.workspace.collections.flatMap(c=>c.requests).find(x=>x.id===this.activeRequestId);
     if(previouslySaved){
@@ -426,7 +437,17 @@ export class AppComponent implements OnDestroy {
     }else copy.id=makeId();
     destination.requests.push(copy);this.draft=copyRequest(copy);
     this.activeRequestId=copy.id;this.activeCollectionId=destination.id;
-    if (!(await this.persist())) { this.error='Could not save the request. Check the workspace warning and retry.'; return; }
+    if (!(await this.persist())) {
+      for(const previous of previousCollections){
+        const collection=this.workspace.collections.find(c=>c.id===previous.id);
+        if(collection)collection.requests=previous.requests;
+      }
+      this.draft=previousDraft;
+      this.activeRequestId=previousRequestId;
+      this.activeCollectionId=previousDestinationId;
+      this.error='Could not save the request. Your unsaved edits remain open; check the workspace warning and retry.';
+      return;
+    }
     const tab=this.activeRequestTab;
     if(tab){tab.savedId=copy.id;tab.draft=this.draft;tab.collectionId=destination.id;}
     this.rememberOpenRequestTabs();
@@ -439,12 +460,19 @@ export class AppComponent implements OnDestroy {
     this.inform('Save this copy to a collection');
   }
   deleteRequest():void {
-    if(!this.activeRequestId || !confirm('Delete this saved request?'))return;
-    for(const c of this.workspace.collections)c.requests=c.requests.filter(r=>r.id!==this.activeRequestId);
+    if(this.running){this.inform('Finish the running request first.');return;}
+    if(!this.activeRequestId || !confirm('Delete this saved request? Unsaved edits to this request will also be discarded.'))return;
+    this.syncActiveRequestTab();
     const deleted=this.activeRequestId;
+    for(const c of this.workspace.collections)c.requests=c.requests.filter(r=>r.id!==deleted);
     this.requestTabs=this.requestTabs.filter(t=>t.savedId!==deleted);
-    this.restoreRequestTabs();
-    this.persist();this.inform('Request deleted');
+    if(!this.requestTabs.length){
+      const first=this.workspace.collections.flatMap(c=>c.requests)[0];
+      this.requestTabs.push(first?this.newTab(first,first.id,first.collectionId):this.newTab(freshRequest(),null,this.workspace.collections[0]?.id??null));
+    }
+    if(!this.requestTabs.some(t=>t.key===this.activeTabKey))this.showRequestTab(this.requestTabs[0]);
+    this.rememberOpenRequestTabs();
+    void this.persist();this.inform('Request deleted');
   }
   createRow(items:KeyValue[]):void {items.push(row());}
   removeRow(items:KeyValue[],id:string):void {const i=items.findIndex(x=>x.id===id);if(i>=0)items.splice(i,1);}
@@ -474,6 +502,7 @@ export class AppComponent implements OnDestroy {
     downloadJson(this.workspace,'api-studio-workspace.json');this.closePopup();
   }
   async importWorkspace(event:Event):Promise<void> {
+    if(this.running){this.inform('Finish the running request before importing a workspace.');return;}
     const input=event.target as HTMLInputElement;
     const file=input.files?.[0];input.value='';
     if(!file)return;
