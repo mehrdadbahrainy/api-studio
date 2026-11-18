@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { isTauri, invoke } from '@tauri-apps/api/core';
 import { SecureWorkspace, describeVaultError } from './core/secure-workspace';
 import { SystemWorkspace } from './core/system-workspace';
+import { MAX_EDITOR_TABS, readTabPreferences, requestIsDirty, resolveSavedTabIds, writeTabPreferences } from './core/editor-tab-state';
 import { COLLAPSED_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth, readSidebarPreferences, writeSidebarPreferences } from './core/sidebar-state';
 import { checkForUpdates, RELEASES_PAGE } from './core/update-check';
 import { executeRequest } from './core/http-transport';
@@ -13,6 +14,17 @@ import { parseImportedJson } from './core/import-json';
 import { activeVariables, readableBytes, RequestValidationError } from './core/request-utils';
 import { RequestTransportError } from './core/network-errors';
 import { AuthMode, BodyMode, Collection, EditorTab, Environment, HistoryEntry, HttpMethod, HttpResult, KeyValue, RequestDraft, ResponseTab, Workspace, copyRequest, freshRequest, initialWorkspace, makeId, row } from './core/models';
+
+interface OpenRequestTab {
+  key: string;
+  savedId: string | null;
+  draft: RequestDraft;
+  collectionId: string | null;
+  response: HttpResult | null;
+  error: string;
+  editorTab: EditorTab;
+  responseTab: ResponseTab;
+}
 
 @Component({
   selector:'app-root',standalone:true,imports:[CommonModule,FormsModule],
@@ -46,6 +58,9 @@ export class AppComponent implements OnDestroy {
   editorTab:EditorTab='params';
   responseTab:ResponseTab='body';
   sidebarTab:'collections'|'history'='collections';
+  requestTabs:OpenRequestTab[]=[];
+  activeTabKey='';
+  pendingCloseTabKey:string|null=null;
   sidebarWidth=DEFAULT_SIDEBAR_WIDTH;
   sidebarCollapsed=false;
   isResizingSidebar=false;
@@ -77,6 +92,7 @@ export class AppComponent implements OnDestroy {
     this.draft=first?copyRequest(first):freshRequest();
     this.activeRequestId=first?.id??null;
     this.activeCollectionId=first?.collectionId??null;
+    if(!this.isDesktop)this.restoreRequestTabs();
     if(this.isDesktop) void this.initializeDesktop();
   }
   ngOnDestroy():void {this.controller?.abort();if(this.notificationTimer)clearTimeout(this.notificationTimer);this.isResizingSidebar=false;}
@@ -91,6 +107,7 @@ export class AppComponent implements OnDestroy {
     this.vaultMode=mode;
     this.vaultLocked=false;
     this.vaultError='';
+    this.restoreRequestTabs();
   }
   private async initializeDesktop():Promise<void> {
     try {
@@ -178,6 +195,129 @@ export class AppComponent implements OnDestroy {
     return this.workspace.collections.map(c=>c.name.toLowerCase().includes(q)?c:{...c,requests:c.requests.filter(r=>(r.name+' '+r.method+' '+r.url).toLowerCase().includes(q))}).filter(c=>c.requests.length||c.name.toLowerCase().includes(q));
   }
 
+  get activeRequestTab():OpenRequestTab|undefined { return this.requestTabs.find(t=>t.key===this.activeTabKey); }
+  isTabDirty(tab:OpenRequestTab):boolean {
+    const saved=tab.savedId?this.workspace.collections.flatMap(c=>c.requests).find(r=>r.id===tab.savedId)??null:null;
+    const destination=tab.key===this.activeTabKey?this.activeCollectionId:tab.collectionId;
+    return requestIsDirty(tab.draft,saved,destination);
+  }
+  private newTab(draft:RequestDraft,savedId:string|null,collectionId:string|null):OpenRequestTab {
+    return {key:makeId(),savedId,draft:copyRequest(draft),collectionId,response:null,error:'',editorTab:'params',responseTab:'body'};
+  }
+  private rememberOpenRequestTabs():void {
+    const ids=this.requestTabs.map(t=>t.savedId).filter((id):id is string=>!!id);
+    const active=this.activeRequestTab?.savedId??null;
+    writeTabPreferences(typeof localStorage==='undefined'?null:localStorage,{requestIds:ids,activeRequestId:active});
+  }
+  private syncActiveRequestTab():void {
+    const tab=this.activeRequestTab;
+    if(!tab)return;
+    tab.draft=this.draft;
+    tab.savedId=this.activeRequestId;
+    tab.collectionId=this.activeCollectionId;
+    tab.response=this.response;
+    tab.error=this.error;
+    tab.editorTab=this.editorTab;
+    tab.responseTab=this.responseTab;
+  }
+  private showRequestTab(tab:OpenRequestTab):void {
+    this.activeTabKey=tab.key;
+    this.draft=tab.draft;
+    this.activeRequestId=tab.savedId;
+    this.activeCollectionId=tab.collectionId;
+    this.response=tab.response;
+    this.error=tab.error;
+    this.editorTab=tab.editorTab;
+    this.responseTab=tab.responseTab;
+  }
+  private restoreRequestTabs():void {
+    const prefs=readTabPreferences(typeof localStorage==='undefined'?null:localStorage);
+    const ids=resolveSavedTabIds(this.workspace,prefs);
+    this.requestTabs=ids.map(id=>{
+      const saved=this.workspace.collections.flatMap(c=>c.requests).find(x=>x.id===id)!;
+      return this.newTab(saved,id,saved.collectionId);
+    });
+    if(!this.requestTabs.length){
+      const first=this.workspace.collections.flatMap(c=>c.requests)[0];
+      this.requestTabs.push(first?this.newTab(first,first.id,first.collectionId):
+        this.newTab(freshRequest(),null,this.workspace.collections[0]?.id??null));
+    }
+    const selected=this.requestTabs.find(t=>t.savedId===prefs.activeRequestId)??this.requestTabs[0];
+    this.showRequestTab(selected);
+    this.rememberOpenRequestTabs();
+  }
+  switchRequestTab(key:string):void {
+    if(this.activeTabKey===key)return;
+    if(this.running){this.inform('Cancel or finish the current request before switching tabs.');return;}
+    const tab=this.requestTabs.find(t=>t.key===key);
+    if(!tab)return;
+    this.syncActiveRequestTab();
+    this.showRequestTab(tab);
+    this.rememberOpenRequestTabs();
+  }
+  private openDraftTab(draft:RequestDraft,savedId:string|null,collectionId:string|null):void {
+    if(this.requestTabs.length>=MAX_EDITOR_TABS){this.inform('Close a tab before opening another (12 tab limit).');return;}
+    this.syncActiveRequestTab();
+    const tab=this.newTab(draft,savedId,collectionId);
+    this.requestTabs.push(tab);
+    this.showRequestTab(tab);
+    this.sidebarTab='collections';
+    this.showMenu=false;
+    this.rememberOpenRequestTabs();
+  }
+  requestCloseTab(key:string):void {
+    if(this.running){this.inform('Cancel the active request before closing a tab.');return;}
+    const tab=this.requestTabs.find(t=>t.key===key);
+    if(!tab)return;
+    this.syncActiveRequestTab();
+    if(this.isTabDirty(tab)){this.pendingCloseTabKey=key;return;}
+    this.removeRequestTab(key);
+  }
+  private removeRequestTab(key:string):void {
+    const index=this.requestTabs.findIndex(t=>t.key===key);
+    if(index<0)return;
+    const wasActive=this.activeTabKey===key;
+    this.requestTabs.splice(index,1);
+    if(!this.requestTabs.length){
+      const first=this.workspace.collections.flatMap(c=>c.requests)[0];
+      this.requestTabs.push(first?this.newTab(first,first.id,first.collectionId):
+        this.newTab(freshRequest(),null,this.workspace.collections[0]?.id??null));
+    }
+    if(wasActive)this.showRequestTab(this.requestTabs[Math.min(index,this.requestTabs.length-1)]);
+    this.pendingCloseTabKey=null;
+    this.rememberOpenRequestTabs();
+  }
+  async resolveCloseTab(choice:'save'|'discard'|'cancel'):Promise<void> {
+    const key=this.pendingCloseTabKey;
+    if(!key || choice==='cancel'){this.pendingCloseTabKey=null;return;}
+    if(choice==='discard'){this.removeRequestTab(key);return;}
+    this.pendingCloseTabKey=null;
+    this.switchRequestTab(key);
+    await this.saveRequest();
+    const tab=this.requestTabs.find(t=>t.key===key);
+    if(tab && tab.savedId && !this.isTabDirty(tab))this.removeRequestTab(key);
+    else this.pendingCloseTabKey=key;
+  }
+  onCollectionSelection(id:string|null):void {
+    this.activeCollectionId=id;
+    const tab=this.activeRequestTab;
+    if(tab)tab.collectionId=id;
+  }
+  renameCurrentRequest():void {
+    const name=window.prompt('Request name',this.draft.name);
+    if(name===null)return;
+    const trimmed=name.trim();
+    if(!trimmed){this.inform('Request name cannot be empty.');return;}
+    this.draft.name=trimmed.slice(0,160);
+  }
+  @HostListener('window:beforeunload',['$event'])
+  protectUnsavedTabs(event:BeforeUnloadEvent):void {
+    if(this.requestTabs.some(t=>this.isTabDirty(t))){
+      event.preventDefault();
+      event.returnValue='';
+    }
+  }
+
   /** UI state never enters encrypted Workspace JSON or its backups. */
   private rememberLayout():void {
     writeSidebarPreferences(typeof localStorage==='undefined'?null:localStorage,{
@@ -247,9 +387,18 @@ export class AppComponent implements OnDestroy {
     if(err)this.warning=err;
     return !err;
   }
-  newRequest():void {this.draft=freshRequest();this.activeRequestId=null;this.activeCollectionId=this.workspace.collections[0]?.id??null;this.response=null;this.error='';this.editorTab='params';this.showMenu=false;}
-  selectRequest(item:RequestDraft):void {this.draft=copyRequest(item);this.activeRequestId=item.id;this.activeCollectionId=item.collectionId;this.response=null;this.error='';this.sidebarTab='collections';this.closePopup();}
-  selectHistory(item:HistoryEntry):void {this.draft=copyRequest(item.request);this.draft.id=makeId();this.draft.collectionId=null;this.activeRequestId=null;this.activeCollectionId=this.workspace.collections[0]?.id??null;this.response=null;this.error='';this.inform('History request loaded. Save it to a collection if needed.');}
+  newRequest():void {this.openDraftTab(freshRequest(),null,this.workspace.collections[0]?.id??null);}
+  selectRequest(item:RequestDraft):void {
+    const existing=this.requestTabs.find(t=>t.savedId===item.id);
+    if(existing){this.switchRequestTab(existing.key);this.sidebarTab='collections';this.closePopup();return;}
+    this.openDraftTab(item,item.id,item.collectionId);
+  }
+  selectHistory(item:HistoryEntry):void {
+    const draft=copyRequest(item.request);
+    draft.id=makeId();draft.collectionId=null;
+    this.openDraftTab(draft,null,this.workspace.collections[0]?.id??null);
+    this.inform('History request loaded. Save it to a collection if needed.');
+  }
   createCollection():void {
     const name=this.newCollectionName.trim();if(!name)return;
     const collection:Collection={id:makeId(),name,requests:[]};
@@ -259,7 +408,10 @@ export class AppComponent implements OnDestroy {
     if(!window.confirm(`Delete "${collection.name}" and all ${collection.requests.length} saved requests?`))return;
     this.workspace.collections=this.workspace.collections.filter(c=>c.id!==collection.id);
     this.collapsedCollectionIds.delete(collection.id);this.rememberLayout();
-    if(this.activeCollectionId===collection.id){this.newRequest();}
+    // Deleting a Collection is explicitly confirmed. Remove associated editor tabs
+    // to avoid preserving an orphaned draft over a deleted request.
+    this.requestTabs=this.requestTabs.filter(t=>t.collectionId!==collection.id);
+    this.restoreRequestTabs();
     this.persist();this.inform('Collection removed');
   }
   async saveRequest():Promise<void> {
@@ -275,13 +427,24 @@ export class AppComponent implements OnDestroy {
     destination.requests.push(copy);this.draft=copyRequest(copy);
     this.activeRequestId=copy.id;this.activeCollectionId=destination.id;
     if (!(await this.persist())) { this.error='Could not save the request. Check the workspace warning and retry.'; return; }
+    const tab=this.activeRequestTab;
+    if(tab){tab.savedId=copy.id;tab.draft=this.draft;tab.collectionId=destination.id;}
+    this.rememberOpenRequestTabs();
     this.error='';this.inform('Request saved');
   }
-  duplicateRequest():void {this.draft=copyRequest(this.draft);this.draft.id=makeId();this.draft.name=`${this.draft.name} copy`;this.activeRequestId=null;this.response=null;this.inform('Save this copy to a collection');}
+  duplicateRequest():void {
+    const copy=copyRequest(this.draft);
+    copy.id=makeId();copy.name=`${copy.name} copy`;
+    this.openDraftTab(copy,null,this.activeCollectionId);
+    this.inform('Save this copy to a collection');
+  }
   deleteRequest():void {
     if(!this.activeRequestId || !confirm('Delete this saved request?'))return;
     for(const c of this.workspace.collections)c.requests=c.requests.filter(r=>r.id!==this.activeRequestId);
-    this.persist();this.newRequest();this.inform('Request deleted');
+    const deleted=this.activeRequestId;
+    this.requestTabs=this.requestTabs.filter(t=>t.savedId!==deleted);
+    this.restoreRequestTabs();
+    this.persist();this.inform('Request deleted');
   }
   createRow(items:KeyValue[]):void {items.push(row());}
   removeRow(items:KeyValue[],id:string):void {const i=items.findIndex(x=>x.id===id);if(i>=0)items.splice(i,1);}
@@ -335,6 +498,7 @@ export class AppComponent implements OnDestroy {
         return;
       }
       const first=this.workspace.collections.flatMap(c=>c.requests).find(x=>x.id===result.firstRequestId);
+      if(native){this.restoreRequestTabs();}
       if(first)this.selectRequest(first);
       else if(native)this.newRequest();
       this.error='';
@@ -351,6 +515,14 @@ export class AppComponent implements OnDestroy {
     if(event.key==='Enter'){event.preventDefault();void this.send();}
     if(event.key.toLowerCase()==='s'){event.preventDefault();this.saveRequest();}
     if(event.key.toLowerCase()==='n'){event.preventDefault();this.newRequest();}
+    if(event.key.toLowerCase()==='w'){event.preventDefault();this.requestCloseTab(this.activeTabKey);}
+    if(event.key==='Tab'){
+      event.preventDefault();
+      const index=this.requestTabs.findIndex(t=>t.key===this.activeTabKey);
+      const delta=event.shiftKey?-1:1;
+      const next=(index+delta+this.requestTabs.length)%this.requestTabs.length;
+      this.switchRequestTab(this.requestTabs[next].key);
+    }
   }
   formatDate(value:string):string {const d=new Date(value);return Number.isNaN(d.getTime())?'':d.toLocaleString();}
   methodStyle(method:HttpMethod):string{return method.toLowerCase();}
