@@ -82,10 +82,31 @@
       </div>
     </header>
 
+
+    <nav class="open-request-tabs" role="tablist" aria-label="Open requests">
+      @for(tab of requestTabs;track tab.key){
+        <div class="open-request-tab" [class.active]="tab.key===activeTabKey">
+          <button type="button" class="open-tab-select" role="tab" [attr.aria-selected]="tab.key===activeTabKey"
+            [attr.aria-label]="'Open '+tab.draft.name" (click)="switchRequestTab(tab.key)"
+            [title]="tab.draft.name">
+            <span class="tab-method" [ngClass]="methodStyle(tab.draft.method)">{{tab.draft.method}}</span>
+            <span class="tab-name">{{tab.draft.name || 'Untitled request'}}</span>
+            @if(isTabDirty(tab)){<span class="unsaved-dot" title="Unsaved changes" aria-label="Unsaved changes"></span>}
+          </button>
+          <button type="button" class="close-request-tab" [attr.aria-label]="'Close tab '+tab.draft.name"
+            title="Close tab (Ctrl+W)" (click)="requestCloseTab(tab.key)">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg>
+          </button>
+        </div>
+      }
+      <button type="button" class="new-request-tab" (click)="newRequest()" title="Open new request tab" aria-label="Open new request tab">
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#plus"></use></svg>
+      </button>
+    </nav>
     <div class="page-content">
       <div class="headline">
-        <div><p class="kicker">REQUEST BUILDER</p><h1><input class="request-name-input" [(ngModel)]="draft.name" maxlength="160" aria-label="Request name" placeholder="Untitled request"></h1><p class="subline">Create, send, and inspect HTTP requests. Everything stays on your device.</p></div>
-        <div class="headline-actions"><label class="collection-selector"><span>Save to</span><select [(ngModel)]="activeCollectionId" aria-label="Destination collection">@for(collection of workspace.collections;track collection.id){<option [ngValue]="collection.id">{{collection.name}}</option>}</select></label><button type="button" class="button outline" (click)="duplicateRequest()">Duplicate</button><button type="button" class="button outline" (click)="saveRequest()" title="Save request (Ctrl+S)"><svg class="ui-icon" viewBox="0 0 24 24"><use href="assets/lucide.svg#save"></use></svg> Save request</button></div>
+        <div><p class="kicker">REQUEST BUILDER</p><h1><input class="request-name-input" [(ngModel)]="draft.name" maxlength="160" aria-label="Request name" placeholder="Untitled request"><span class="draft-indicator" [class.is-dirty]="activeRequestTab && isTabDirty(activeRequestTab)">{{activeRequestTab && isTabDirty(activeRequestTab)?'Unsaved changes':'Saved'}}</span></h1><p class="subline">Create, send, and inspect HTTP requests. Everything stays on your device.</p></div>
+        <div class="headline-actions"><label class="collection-selector"><span>Save to</span><select [ngModel]="activeCollectionId" (ngModelChange)="onCollectionSelection($event)" aria-label="Destination collection">@for(collection of workspace.collections;track collection.id){<option [ngValue]="collection.id">{{collection.name}}</option>}</select></label><button type="button" class="button outline" (click)="renameCurrentRequest()">Rename</button><button type="button" class="button outline" (click)="duplicateRequest()">Duplicate</button><button type="button" class="button outline" (click)="saveRequest()" title="Save request (Ctrl+S)"><svg class="ui-icon" viewBox="0 0 24 24"><use href="assets/lucide.svg#save"></use></svg> Save request</button></div>
       </div>
 
       @if (warning) {<div class="alert warning"><span>!</span>{{warning}}<button type="button" (click)="warning=''" aria-label="Dismiss warning"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button></div>}
@@ -163,6 +184,21 @@
     </div>
   </main>
 </div>
+
+@if(pendingCloseTabKey){
+  <div class="modal-backdrop" (click)="resolveCloseTab('cancel')">
+    <section class="modal close-tab-dialog" role="dialog" aria-modal="true" aria-labelledby="close-tab-heading" (click)="$event.stopPropagation()">
+      <header class="modal-heading">
+        <div><p class="kicker">UNSAVED CHANGES</p><h2 id="close-tab-heading">Close this request?</h2><p>The request has changes that have not been saved to a Collection.</p></div>
+      </header>
+      <div class="modal-body close-tab-actions">
+        <button type="button" class="button outline" (click)="resolveCloseTab('cancel')">Keep editing</button>
+        <button type="button" class="button outline close-discard" (click)="resolveCloseTab('discard')">Discard changes</button>
+        <button type="button" class="button primary" (click)="resolveCloseTab('save')">Save and close</button>
+      </div>
+    </section>
+  </div>
+}
 @if(showEnvironments){
   <div class="modal-backdrop" (click)="showEnvironments=false">
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="env-heading" (click)="$event.stopPropagation()">
