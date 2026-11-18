@@ -17,8 +17,8 @@ export function parseTabPreferences(raw:string|null):TabPreferences {
     if(!v || typeof v!=='object' || Array.isArray(v))return {...EMPTY,requestIds:[]};
     const object=v as Record<string,unknown>;
     const ids=Array.isArray(object.requestIds)?object.requestIds:[];
-    const valid=ids.filter((id):id is string=>typeof id==='string' && id.length>0 && id.length<=128).slice(0,MAX_EDITOR_TABS);
-    const distinct=[...new Set(valid)];
+    const valid=ids.filter((id):id is string=>typeof id==='string' && id.length>0 && id.length<=128);
+    const distinct=[...new Set(valid)].slice(0,MAX_EDITOR_TABS);
     const active=typeof object.activeRequestId==='string' && distinct.includes(object.activeRequestId)?object.activeRequestId:null;
     return {requestIds:distinct,activeRequestId:active};
   }catch{return {...EMPTY,requestIds:[]};}
