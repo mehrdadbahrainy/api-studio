@@ -178,7 +178,13 @@ async function main() {
   await page.getByRole('button',{name:/Save request/}).click();
   await expect(page.locator('.toast')).toContainText('Request saved');
   await expect(page.getByRole('tab',{name:'Open Native second tab'})).toBeVisible();
-  console.log('PASS: installed MSI native folder creation, Collection move, and additional saved tab');
+  // A forced process kill may precede WebView2's deferred localStorage flush.
+  // Reload inside the installed app first to verify persisted nonsecret tab IDs.
+  await page.reload();
+  await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
+  await expect(page.getByRole('tab',{name:'Open Native second tab'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Collapse folder Native'})).toBeVisible();
+  console.log('PASS: installed MSI native folder creation, Collection move, and saved tab restoration after WebView2 reload');
 
   console.log('Native protected migration and saving passed. Restarting without a password.');
   await stop();
