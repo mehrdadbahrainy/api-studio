@@ -45,3 +45,20 @@ test('missing and blocked preference storage never lose workspace data',()=>{
   assert.deepEqual(readTabPreferences(broken).requestIds,[]);
   assert.doesNotThrow(()=>writeTabPreferences(broken,{requestIds:['id'],activeRequestId:'id'}));
 });
+
+test('encrypted workspace parser retains only valid saved-tab IDs across restart',()=>{
+  const {parseWorkspace}=require('../.test-dist/workspace-utils.js');
+  const ws=initialWorkspace();
+  const saved=ws.collections[0].requests[0];
+  const second={...freshRequest(),collectionId:ws.collections[0].id,name:'Second tab'};
+  ws.collections[0].requests.push(second);
+  ws.openTabState={requestIds:[saved.id,second.id],activeRequestId:second.id};
+  const protectedPayload=JSON.stringify(ws);
+  const restored=parseWorkspace(JSON.parse(protectedPayload));
+  assert.deepEqual(restored.openTabState,ws.openTabState);
+  const malicious={...ws,openTabState:{requestIds:[saved.id,'missing',saved.id,'secret?token=bad'],activeRequestId:'missing'}};
+  const cleaned=parseWorkspace(malicious);
+  assert.deepEqual(cleaned.openTabState,{requestIds:[saved.id],activeRequestId:null});
+  const old=JSON.parse(protectedPayload);delete old.openTabState;
+  assert.equal(parseWorkspace(old).openTabState,undefined);
+});
