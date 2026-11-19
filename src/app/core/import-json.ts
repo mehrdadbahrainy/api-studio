@@ -1,4 +1,5 @@
-import { Collection, Environment, KeyValue, RequestDraft, Workspace, freshRequest, makeId, row } from './models';
+import { Collection, Environment, Folder, KeyValue, RequestDraft, Workspace, freshRequest, makeId, row } from './models';
+import { ensureFolderPath } from './folder-utils';
 import { parseWorkspace } from './workspace-utils';
 
 type Source = Record<string, unknown>;
@@ -145,6 +146,7 @@ function importCollection(raw: Source, workspace: Workspace): ImportResult {
     throw new Error('Only Postman Collection v2.0 and v2.1 JSON exports are supported.');
   const name = str(info.name).trim().slice(0, 120) || 'Postman collection';
   const groups: Collection[] = [];
+  const newFolders:Folder[]=[];
   const byPath = new Map<string, Collection>();
   const warnings = new Set<string>();
   let count = 0;
@@ -153,7 +155,9 @@ function importCollection(raw: Source, workspace: Workspace): ImportResult {
     const key = path.join(' / ') || name;
     let found = byPath.get(key);
     if (!found) {
-      found = { id: makeId(), name: key.slice(0, 120), requests: [] };
+      const plan=ensureFolderPath([...(workspace.folders??[]),...newFolders],path.slice(0,-1));
+      newFolders.splice(0,newFolders.length,...plan.folders.slice((workspace.folders??[]).length));
+      found = { id: makeId(), name: key.slice(0, 120), requests: [],...(plan.id?{folderId:plan.id}:{}) };
       byPath.set(key, found);
       groups.push(found);
     }
@@ -189,6 +193,7 @@ function importCollection(raw: Source, workspace: Workspace): ImportResult {
   const next: Workspace = {
     ...workspace,
     collections: [...workspace.collections, ...groups],
+    folders:[...(workspace.folders??[]),...newFolders],
     environments: env ? [...workspace.environments, env] : workspace.environments,
     selectedEnvironmentId: env ? env.id : workspace.selectedEnvironmentId
   };

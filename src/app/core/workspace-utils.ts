@@ -1,4 +1,4 @@
-import { Collection, Environment, HistoryEntry, KeyValue, RequestDraft, Workspace, copyRequest, freshRequest, initialWorkspace, makeId } from './models';
+import { Collection, Environment, Folder, HistoryEntry, KeyValue, RequestDraft, Workspace, copyRequest, freshRequest, initialWorkspace, makeId } from './models';
 const MAX_COLLECTIONS = 150;
 const MAX_REQUESTS = 2000;
 const MAX_HISTORY = 80;
@@ -27,15 +27,37 @@ export function parseWorkspace(raw: unknown): Workspace {
     d.basicUsername=String(r.basicUsername??'').slice(0,1000);d.basicPassword=String(r.basicPassword??'').slice(0,10000);
     return d;
   };
+  // Optional additive folder data keeps all v0.1.x version:1 workspace backups valid.
+  if(input.folders!==undefined&&!Array.isArray(input.folders))throw new Error('Invalid workspace folders.');
+  if(Array.isArray(input.folders)&&input.folders.length>150)throw new Error('Too many folders.');
+  const folders:Folder[]=(Array.isArray(input.folders)?input.folders:[]).map((folder:any)=>{
+    if(!folder||typeof folder!=='object'||typeof folder.id!=='string'||!folder.id||typeof folder.name!=='string'||!folder.name.trim())
+      throw new Error('Invalid workspace folder.');
+    return {id:folder.id.slice(0,128),name:folder.name.trim().slice(0,120),parentId:typeof folder.parentId==='string'?folder.parentId:null};
+  });
+  const folderIds=new Set(folders.map(f=>f.id));
+  if(folderIds.size!==folders.length)throw new Error('Duplicate folder identifiers.');
+  const folderById=new Map(folders.map(f=>[f.id,f]));
+  for(const folder of folders){
+    const seen=new Set<string>([folder.id]);
+    let parent=folder.parentId;
+    while(parent){
+      if(seen.has(parent)||!folderById.has(parent))throw new Error('Folder hierarchy is invalid or cyclic.');
+      seen.add(parent);
+      if(seen.size>21)throw new Error('Folder hierarchy is too deep.');
+      parent=folderById.get(parent)!.parentId;
+    }
+  }
   const collections:Collection[]=input.collections.slice(0,MAX_COLLECTIONS).map((c:any)=>{
     if(!c || typeof c!=='object') throw new Error('Invalid collection.');
     const id=typeof c.id==='string'?c.id:makeId();
-    return {id,name:String(c.name??'Untitled collection').slice(0,120),requests:Array.isArray(c.requests)?c.requests.map((r:any)=>parseRequest(r,id)):[]};
+    return {id,name:String(c.name??'Untitled collection').slice(0,120),requests:Array.isArray(c.requests)?c.requests.map((r:any)=>parseRequest(r,id)):[],
+      ...(typeof c.folderId==='string'&&folderIds.has(c.folderId)?{folderId:c.folderId}:{})};
   });
   const environments:Environment[]=input.environments.slice(0,80).map((e:any)=>({id:typeof e?.id==='string'?e.id:makeId(),name:String(e?.name??'Environment').slice(0,120),variables:cleanRows(e?.variables)}));
   const history:HistoryEntry[]=Array.isArray(input.history)?input.history.slice(0,MAX_HISTORY).filter((h:any)=>h && typeof h==='object').map((h:any)=>({id:typeof h.id==='string'?h.id:makeId(),at:String(h.at??''),request:redactHistoryRequest(parseRequest(h.request??{},null)),status:typeof h.status==='number'?h.status:null,durationMs:typeof h.durationMs==='number'?h.durationMs:null})):[];
   const selectedEnvironmentId=environments.some(e=>e.id===input.selectedEnvironmentId)?input.selectedEnvironmentId:null;
-  return {version:1,collections,environments,selectedEnvironmentId,history};
+  return {version:1,collections,environments,selectedEnvironmentId,history,...(folders.length?{folders}:{})};
 }
 export function safeLoad(raw:string|null): Workspace {
   if (!raw) return initialWorkspace();

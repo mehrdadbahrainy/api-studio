@@ -222,3 +222,17 @@
 .response-error-state .response-empty-icon{color:#b64f5a}
 .response-code{max-height:65vh;overflow:auto;white-space:pre}
 @media(max-width:760px){.response-format-control{margin-left:0}.response-tools{gap:8px}}
+
+/* v0.2.0 folder hierarchy */
+.folder-tree-row{display:flex;align-items:center;gap:3px;min-height:35px;margin:2px 0 4px}
+.folder-tree-toggle{display:flex;align-items:center;gap:8px;flex:1;min-width:0;padding:7px 8px;background:#202c44;border-radius:7px;color:#e4e7f7;font-size:13px;font-weight:780;text-align:left}
+.folder-tree-toggle:hover{background:#2b3954}
+.folder-tree-toggle .ui-icon{width:14px;height:14px;flex:0 0 14px}
+.folder-tree-toggle .folder-glyph{color:#b1a6ff}
+.folder-delete,.collection-move{background:transparent;display:inline-flex;align-items:center;justify-content:center;flex:0 0 22px;width:22px;height:24px;padding:0;color:#93a0b9;opacity:.45}
+.folder-delete:hover,.collection-move:hover{opacity:1;color:#fff;background:#394a68}
+.folder-delete .ui-icon,.collection-move .ui-icon{width:12px;height:12px;flex:0 0 12px}
+.folder-tree-row .folder-delete{opacity:.6}
+.collection-group{min-width:0}
+.collection-group .collection-title{padding-right:2px}
+.collection-group .collection-toggle{min-width:0;flex:1}

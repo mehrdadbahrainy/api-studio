@@ -8,6 +8,8 @@ import { MAX_EDITOR_TABS, readTabPreferences, requestIsDirty, resolveSavedTabIds
 import { COLLAPSED_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth, readSidebarPreferences, writeSidebarPreferences } from './core/sidebar-state';
 import { checkForUpdates, RELEASES_PAGE } from './core/update-check';
 import { ResponseMode, ResponsePreview, responsePreview, responseFileName } from './core/response-viewer';
+import { Folder } from './core/models';
+import { collectionNavigation, ensureFolderPath, folderBreadcrumb, NavigationItem } from './core/folder-utils';
 import { CHANGELOG_URL, DOCUMENTATION_URL, ISSUES_URL, LICENSE_URL, PERSIAN_GUIDE_URL, SOURCE_REPOSITORY, UpdateStatus } from './core/release-catalog';
 import { executeRequest } from './core/http-transport';
 import { loadWorkspace, saveWorkspace, downloadJson } from './core/storage';
@@ -78,6 +80,7 @@ export class AppComponent implements OnDestroy {
   sidebarCollapsed=false;
   isResizingSidebar=false;
   collapsedCollectionIds=new Set<string>();
+  collapsedFolderIds=new Set<string>();
   response:HttpResult|null=null;
   running=false;
   error='';
@@ -215,10 +218,62 @@ export class AppComponent implements OnDestroy {
   get canHaveBody():boolean{return this.draft.method!=='GET'&&this.draft.method!=='HEAD';}
   get currentResponsePreview():ResponsePreview|null{return this.response?responsePreview(this.response,this.responseMode):null;}
   get activeVariableCount():number{return Object.keys(activeVariables(this.activeEnvironment)).length;}
-  get filteredCollections():Collection[] {
-    const q=this.filter.trim().toLowerCase();
-    if(!q)return this.workspace.collections;
-    return this.workspace.collections.map(c=>c.name.toLowerCase().includes(q)?c:{...c,requests:c.requests.filter(r=>(r.name+' '+r.method+' '+r.url).toLowerCase().includes(q))}).filter(c=>c.requests.length||c.name.toLowerCase().includes(q));
+  get navigationItems():NavigationItem[] {
+    return collectionNavigation(this.workspace,this.filter,this.collapsedFolderIds);
+  }
+  isFolderExpanded(id:string):boolean{return !!this.filter.trim() || !this.collapsedFolderIds.has(id);}
+  toggleFolder(id:string):void {
+    if(this.collapsedFolderIds.has(id))this.collapsedFolderIds.delete(id);
+    else this.collapsedFolderIds.add(id);
+  }
+  async createFolder():Promise<void> {
+    if(this.vaultLocked)return;
+    const raw=window.prompt('Folder path (for example: Team / Orders)', '');
+    if(raw===null)return;
+    const path=raw.split('/').map(x=>x.trim()).filter(Boolean);
+    if(!path.length){this.inform('Enter a folder name.');return;}
+    const original=this.workspace.folders;
+    try{
+      const next=ensureFolderPath(original??[],path);
+      if(next.folders.length===(original?.length??0)){this.inform('Folder already exists.');return;}
+      this.workspace.folders=next.folders;
+      if(!await this.persist()){this.workspace.folders=original;this.error='Could not save folder; workspace was kept unchanged.';return;}
+      this.inform('Folder created');
+    }catch(e){this.error=e instanceof Error?e.message:'Invalid folder name.';}
+  }
+  async moveCollectionToFolder(collection:Collection):Promise<void> {
+    if(this.vaultLocked || this.running)return;
+    const current=folderBreadcrumb(this.workspace.folders??[],collection.folderId);
+    const raw=window.prompt('Move Collection to folder path (blank = root)',current);
+    if(raw===null)return;
+    const path=raw.split('/').map(x=>x.trim()).filter(Boolean);
+    const originalFolders=this.workspace.folders;
+    const originalId=collection.folderId;
+    try{
+      const next=ensureFolderPath(originalFolders??[],path);
+      collection.folderId=next.id;
+      this.workspace.folders=next.folders;
+      if(!await this.persist()){
+        collection.folderId=originalId;this.workspace.folders=originalFolders;
+        this.error='Could not move Collection. Original location was restored.';return;
+      }
+      this.inform('Collection moved');
+    }catch(e){this.error=e instanceof Error?e.message:'Invalid folder path.';}
+  }
+  async deleteFolder(folder:Folder):Promise<void> {
+    if(this.vaultLocked || this.running)return;
+    if(!confirm('Remove folder "'+folder.name+'"? Collections and subfolders will move up one level; no requests will be deleted.'))return;
+    const original=this.workspace.folders??[];
+    const collectionIds=this.workspace.collections.map(c=>c.folderId);
+    this.workspace.folders=original.filter(f=>f.id!==folder.id).map(f=>f.parentId===folder.id?{...f,parentId:folder.parentId}:f);
+    for(const collection of this.workspace.collections)if(collection.folderId===folder.id)collection.folderId=folder.parentId;
+    if(!await this.persist()){
+      this.workspace.folders=original;
+      this.workspace.collections.forEach((c,i)=>{c.folderId=collectionIds[i]});
+      this.error='Could not remove folder; saved data was restored.';return;
+    }
+    this.collapsedFolderIds.delete(folder.id);
+    this.inform('Folder removed, requests preserved');
   }
 
   get activeRequestTab():OpenRequestTab|undefined { return this.requestTabs.find(t=>t.key===this.activeTabKey); }
