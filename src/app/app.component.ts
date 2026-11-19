@@ -7,6 +7,7 @@ import { SystemWorkspace } from './core/system-workspace';
 import { MAX_EDITOR_TABS, readTabPreferences, requestIsDirty, resolveSavedTabIds, writeTabPreferences } from './core/editor-tab-state';
 import { COLLAPSED_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth, readSidebarPreferences, writeSidebarPreferences } from './core/sidebar-state';
 import { checkForUpdates, RELEASES_PAGE } from './core/update-check';
+import { ResponseMode, ResponsePreview, responsePreview, responseFileName } from './core/response-viewer';
 import { CHANGELOG_URL, DOCUMENTATION_URL, ISSUES_URL, LICENSE_URL, PERSIAN_GUIDE_URL, SOURCE_REPOSITORY, UpdateStatus } from './core/release-catalog';
 import { executeRequest } from './core/http-transport';
 import { loadWorkspace, saveWorkspace, downloadJson } from './core/storage';
@@ -25,6 +26,7 @@ interface OpenRequestTab {
   error: string;
   editorTab: EditorTab;
   responseTab: ResponseTab;
+  responseMode:ResponseMode;
 }
 
 @Component({
@@ -67,6 +69,7 @@ export class AppComponent implements OnDestroy {
   activeCollectionId:string|null=null;
   editorTab:EditorTab='params';
   responseTab:ResponseTab='body';
+  responseMode:ResponseMode='formatted';
   sidebarTab:'collections'|'history'='collections';
   requestTabs:OpenRequestTab[]=[];
   activeTabKey='';
@@ -210,6 +213,7 @@ export class AppComponent implements OnDestroy {
   get isSaved():boolean{return !!this.activeRequestId;}
   get requestTitle():string{return this.draft.name || 'Untitled request';}
   get canHaveBody():boolean{return this.draft.method!=='GET'&&this.draft.method!=='HEAD';}
+  get currentResponsePreview():ResponsePreview|null{return this.response?responsePreview(this.response,this.responseMode):null;}
   get activeVariableCount():number{return Object.keys(activeVariables(this.activeEnvironment)).length;}
   get filteredCollections():Collection[] {
     const q=this.filter.trim().toLowerCase();
@@ -224,7 +228,7 @@ export class AppComponent implements OnDestroy {
     return requestIsDirty(tab.draft,saved,destination);
   }
   private newTab(draft:RequestDraft,savedId:string|null,collectionId:string|null):OpenRequestTab {
-    return {key:makeId(),savedId,draft:copyRequest(draft),collectionId,response:null,error:'',editorTab:'params',responseTab:'body'};
+    return {key:makeId(),savedId,draft:copyRequest(draft),collectionId,response:null,error:'',editorTab:'params',responseTab:'body',responseMode:'formatted'};
   }
   private rememberOpenRequestTabs():void {
     const ids=this.requestTabs.map(t=>t.savedId).filter((id):id is string=>!!id);
@@ -241,6 +245,7 @@ export class AppComponent implements OnDestroy {
     tab.error=this.error;
     tab.editorTab=this.editorTab;
     tab.responseTab=this.responseTab;
+    tab.responseMode=this.responseMode;
   }
   private showRequestTab(tab:OpenRequestTab):void {
     this.activeTabKey=tab.key;
@@ -251,6 +256,7 @@ export class AppComponent implements OnDestroy {
     this.error=tab.error;
     this.editorTab=tab.editorTab;
     this.responseTab=tab.responseTab;
+    this.responseMode=tab.responseMode;
   }
   private restoreRequestTabs():void {
     const prefs=readTabPreferences(typeof localStorage==='undefined'?null:localStorage);
@@ -504,7 +510,7 @@ export class AppComponent implements OnDestroy {
   toggleEnvironmentDialog():void{this.showEnvironments=!this.showEnvironments;this.showMenu=false;}
   async send():Promise<void> {
     if(this.running || this.vaultLocked)return;
-    this.error='';this.response=null;this.responseTab='body';this.running=true;
+    this.error='';this.response=null;this.responseTab='body';this.responseMode='formatted';this.running=true;
     this.controller=new AbortController();
     try {
       const result=await executeRequest(this.draft,this.activeEnvironment,{signal:this.controller.signal});
@@ -513,12 +519,33 @@ export class AppComponent implements OnDestroy {
       this.persist();
     }catch(err:unknown){
       const message=err instanceof Error?err.message:String(err);
-      this.error=(err instanceof RequestValidationError || err instanceof RequestTransportError) ? message : 'Request failed unexpectedly. Please check the request and try again.';
+      this.error=this.controller?.signal.aborted
+        ? 'Request cancelled.'
+        : (err instanceof RequestValidationError || err instanceof RequestTransportError)
+          ? message : 'Request failed unexpectedly. Please check the request and try again.';
       this.workspace.history=addHistory(this.workspace.history,this.draft,null,null);this.persist();
     }finally{this.running=false;this.controller=null;}
   }
   cancelRequest():void {this.controller?.abort();}
-  async copyResponse():Promise<void>{if(!this.response)return;try{await navigator.clipboard.writeText(this.responseTab==='body'?this.response.body:this.response.headers.map(x=>`${x.key}: ${x.value}`).join('\n'));this.inform('Copied to clipboard');}catch{this.inform('Could not copy; select the text manually');}}
+  async copyResponse():Promise<void>{
+    if(!this.response)return;
+    const text=this.responseTab==='body'
+      ? this.response.body
+      : this.response.headers.map(x=>`${x.key}: ${x.value}`).join('\n');
+    try{await navigator.clipboard.writeText(text);this.inform('Full response copied to clipboard');}
+    catch{this.inform('Could not copy; select the text manually');}
+  }
+  saveResponse():void {
+    if(!this.response)return;
+    if(this.response.binary){this.inform('Binary response export is not available in this version.');return;}
+    if(!confirm('Response files may contain API keys or private data. Save the full, unencrypted response to your device?'))return;
+    const blob=new Blob([this.response.body],{type:'text/plain;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const anchor=document.createElement('a');
+    anchor.href=url;anchor.download=responseFileName(this.response);anchor.click();
+    setTimeout(()=>URL.revokeObjectURL(url),500);
+    this.inform('Response saved');
+  }
   exportWorkspace():void {
     if(!confirm('The backup may include passwords, tokens and API keys in saved requests and environments. Export to a private location?'))return;
     downloadJson(this.workspace,'api-studio-workspace.json');this.closePopup();

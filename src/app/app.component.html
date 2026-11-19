@@ -176,12 +176,32 @@
             @else{<span class="awaiting-label">Waiting for a request</span>}
           </div>
         </div>
-        <div class="response-tools"><div class="response-tabs"><button (click)="responseTab='body'" [class.active]="responseTab==='body'">Body</button><button (click)="responseTab='headers'" [class.active]="responseTab==='headers'">Headers @if(response){<span>{{response.headers.length}}</span>}</button></div><button type="button" class="copy-button" (click)="copyResponse()" [disabled]="!response"><svg class="ui-icon" viewBox="0 0 24 24"><use href="assets/lucide.svg#copy"></use></svg> Copy</button></div>
+        <div class="response-tools">
+          <div class="response-tabs">
+            <button type="button" (click)="responseTab='body'" [class.active]="responseTab==='body'">Body</button>
+            <button type="button" (click)="responseTab='headers'" [class.active]="responseTab==='headers'">Headers @if(response){<span>{{response.headers.length}}</span>}</button>
+          </div>
+          @if(response && responseTab==='body' && !response.binary){
+            <div class="response-format-control" aria-label="Response view format">
+              <button type="button" [class.active]="responseMode==='formatted'" (click)="responseMode='formatted'">Formatted</button>
+              <button type="button" [class.active]="responseMode==='raw'" (click)="responseMode='raw'">Raw</button>
+            </div>
+          }
+          <button type="button" class="copy-button" (click)="copyResponse()" [disabled]="!response"><svg class="ui-icon" viewBox="0 0 24 24"><use href="assets/lucide.svg#copy"></use></svg> Copy</button>
+          <button type="button" class="copy-button" (click)="saveResponse()" [disabled]="!response || response.binary">Save response</button>
+        </div>
         @if(running){<div class="response-empty"><div class="pulse-mark"></div><h3>Sending request...</h3><p>Connecting to the server</p></div>}
         @else if (response) {
-          @if(responseTab==='body') {<pre class="response-code" tabindex="0">{{response.body}}</pre>}
+          @if(responseTab==='body') {
+            @if(currentResponsePreview;as preview){
+              @if(preview.truncated){<div class="large-response-note" role="status">Large response: preview limited to 500,000 characters. Copy or Save to access the full text.</div>}
+              <div class="response-kind-label">{{preview.kind | uppercase}} · {{responseMode==='formatted'?'Formatted':'Raw'}}</div>
+              <pre class="response-code" tabindex="0">{{preview.text}}</pre>
+            }
+          }
           @else {<div class="response-headers">@for(header of response.headers;track header.id){<div><span>{{header.key}}</span><code>{{header.value}}</code></div>}</div>}
-        } @else {<div class="response-empty"><div class="response-empty-icon">&lt;/&gt;</div><h3>Ready when you are</h3><p>Send a request to see the response here.</p><span class="hint-chip">GET · POST · PUT · PATCH · DELETE</span></div>}
+        } @else if(error){<div class="response-empty response-error-state"><div class="response-empty-icon">!</div><h3>{{error==='Request cancelled.'?'Request cancelled':'Could not complete request'}}</h3><p>{{error}}</p></div>}
+        @else {<div class="response-empty"><div class="response-empty-icon">&lt;/&gt;</div><h3>Ready when you are</h3><p>Send a request to see the response here.</p><span class="hint-chip">GET · POST · PUT · PATCH · DELETE</span></div>}
       </section>
       <footer class="status-footer"><span><span class="footer-indicator"></span>API Studio <span class="footer-divider">•</span> Local-first REST workspace</span><span>{{totalRequests}} saved requests <span class="footer-divider">•</span> {{workspace.history.length}} history entries</span></footer>
     </div>

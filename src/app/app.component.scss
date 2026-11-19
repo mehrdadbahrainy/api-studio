@@ -211,3 +211,14 @@
 .update-available .ui-icon{width:18px;height:18px;flex:0 0 18px}
 .update-available .button{margin-left:auto}
 @media(max-width:760px){.help-links{grid-template-columns:1fr}.help-version-row{gap:10px}.help-about-dialog{max-height:94vh}}
+
+/* v0.2.0 response inspection */
+.response-tools{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.response-format-control{display:flex;align-items:center;gap:2px;margin-left:auto;padding:3px;background:#f0f2f8;border-radius:8px}
+.response-format-control button{padding:6px 9px;border-radius:6px;background:transparent;color:#697891;font-size:12px}
+.response-format-control button.active{background:#fff;color:#4a40b3;box-shadow:0 1px 3px #20305017}
+.large-response-note{padding:12px 24px;background:#fff7ea;color:#8b6629;font-size:13px;border-bottom:1px solid #f2dfbf}
+.response-kind-label{padding:8px 24px 0;color:#8190a6;font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.7px}
+.response-error-state .response-empty-icon{color:#b64f5a}
+.response-code{max-height:65vh;overflow:auto;white-space:pre}
+@media(max-width:760px){.response-format-control{margin-left:0}.response-tools{gap:8px}}
