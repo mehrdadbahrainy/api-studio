@@ -184,6 +184,15 @@ async function main() {
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
   await expect(page.getByRole('tab',{name:'Open Native second tab'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Collapse folder Native'})).toBeVisible();
+  const tabPrefBeforeRestart=await page.evaluate(()=>{
+    const raw=localStorage.getItem('api-studio.editor-tabs.v1');
+    return raw?JSON.parse(raw).requestIds.length:0;
+  });
+  if(tabPrefBeforeRestart<2)throw new Error('Saved tab IDs were not written before native restart');
+  // Installed WebView2 persists localStorage asynchronously. A deliberate grace
+  // period makes this a realistic app restart instead of killing the process
+  // during the browser's pending LevelDB write.
+  await delay(2500);
   console.log('PASS: installed MSI native folder creation, Collection move, and saved tab restoration after WebView2 reload');
 
   console.log('Native protected migration and saving passed. Restarting without a password.');
@@ -191,6 +200,11 @@ async function main() {
   page = await start(19321);
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
   await expect(page.getByRole('button',{name:'Collapse folder Native'})).toBeVisible();
+  const tabPrefAfterRestart=await page.evaluate(()=>{
+    const raw=localStorage.getItem('api-studio.editor-tabs.v1');
+    return raw?JSON.parse(raw).requestIds.length:0;
+  });
+  console.log('Saved tab IDs after native process restart:',tabPrefAfterRestart);
   await expect(page.getByRole('tab',{name:'Open Native second tab'})).toBeVisible();
   await expect(page.getByTitle('Legacy smoke collection').locator('span')).toBeVisible();
   const saved=page.locator('.request-nav').filter({hasText:'Native saved request'});
