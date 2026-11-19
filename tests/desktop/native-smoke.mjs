@@ -178,20 +178,20 @@ async function main() {
   await page.getByRole('button',{name:/Save request/}).click();
   await expect(page.locator('.toast')).toContainText('Request saved');
   await expect(page.getByRole('tab',{name:'Open Native second tab'})).toBeVisible();
-  // A forced process kill may precede WebView2's deferred localStorage flush.
-  // Reload inside the installed app first to verify persisted nonsecret tab IDs.
+  // Reload inside the installed app to verify nonsecret tab IDs are restored
+  // from Windows-protected workspace, independent of WebView2 localStorage flush.
   await page.reload();
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
   await expect(page.getByRole('tab',{name:'Open Native second tab'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Collapse folder Native'})).toBeVisible();
-  const tabPrefBeforeRestart=await page.evaluate(()=>{
-    const raw=localStorage.getItem('api-studio.editor-tabs.v1');
-    return raw?JSON.parse(raw).requestIds.length:0;
+  const tabPrefBeforeRestart=await page.evaluate(async()=>{
+    const raw=await window.__TAURI_INTERNALS__.invoke('read_protected_workspace');
+    const prefs=raw?JSON.parse(raw).openTabState:null;
+    return prefs?.requestIds.length??0;
   });
-  if(tabPrefBeforeRestart<2)throw new Error('Saved tab IDs were not written before native restart');
-  // Installed WebView2 persists localStorage asynchronously. A deliberate grace
-  // period makes this a realistic app restart instead of killing the process
-  // during the browser's pending LevelDB write.
+  if(tabPrefBeforeRestart<2)throw new Error('Saved tab IDs were not committed to Windows-protected workspace');
+  // Protected workspace writes are verified before the save confirmation;
+  // a short pause simulates an ordinary restart rather than a crash.
   await delay(2500);
   console.log('PASS: installed MSI native folder creation, Collection move, and saved tab restoration after WebView2 reload');
 
@@ -200,11 +200,13 @@ async function main() {
   page = await start(19321);
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
   await expect(page.getByRole('button',{name:'Collapse folder Native'})).toBeVisible();
-  const tabPrefAfterRestart=await page.evaluate(()=>{
-    const raw=localStorage.getItem('api-studio.editor-tabs.v1');
-    return raw?JSON.parse(raw).requestIds.length:0;
+  const tabPrefAfterRestart=await page.evaluate(async()=>{
+    const raw=await window.__TAURI_INTERNALS__.invoke('read_protected_workspace');
+    const prefs=raw?JSON.parse(raw).openTabState:null;
+    return prefs?.requestIds.length??0;
   });
   console.log('Saved tab IDs after native process restart:',tabPrefAfterRestart);
+  if(tabPrefAfterRestart<2)throw new Error('Saved tab IDs were lost across installed app restart');
   await expect(page.getByRole('tab',{name:'Open Native second tab'})).toBeVisible();
   await expect(page.getByTitle('Legacy smoke collection').locator('span')).toBeVisible();
   const saved=page.locator('.request-nav').filter({hasText:'Native saved request'});
