@@ -157,11 +157,23 @@ async function main() {
   page.once('dialog',dialog=>dialog.accept('Native / Smoke'));
   await page.getByRole('button',{name:'New folder'}).click();
   await expect(page.getByRole('button',{name:'Collapse folder Native'})).toBeVisible();
+  await expect(page.locator('.toast')).toContainText('Folder created');
   page.once('dialog',dialog=>dialog.accept('Native / Smoke'));
   await page.getByRole('button',{name:'Move collection Legacy smoke collection to folder'}).click();
   await expect(page.getByRole('button',{name:'Collapse folder Smoke'})).toBeVisible();
+  await expect(page.locator('.toast')).toContainText('Collection moved');
   await page.getByRole('button',{name:'Open new request tab'}).click();
-  await page.getByRole('textbox',{name:'Request name'}).fill('Native second tab');
+  const newRequestName=page.getByRole('textbox',{name:'Request name'});
+  await expect(newRequestName).toHaveValue('Untitled request');
+  // Installed WebView2 can coalesce a synthetic fill with Angular model updates
+  // when the tab was just created. Perform a real select-all/replace sequence.
+  await newRequestName.click();
+  await newRequestName.press('Control+A');
+  await newRequestName.press('Backspace');
+  await expect(newRequestName).toHaveValue('');
+  await newRequestName.pressSequentially('Native second tab');
+  await expect(newRequestName).toHaveValue('Native second tab');
+  await newRequestName.press('Tab');
   await page.getByRole('textbox',{name:'Request URL'}).fill('https://example.com/another-tab');
   await page.getByRole('button',{name:/Save request/}).click();
   await expect(page.locator('.toast')).toContainText('Request saved');
@@ -172,6 +184,8 @@ async function main() {
   await stop();
   page = await start(19321);
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
+  await expect(page.getByRole('button',{name:'Collapse folder Native'})).toBeVisible();
+  await expect(page.getByRole('tab',{name:'Open Native second tab'})).toBeVisible();
   await expect(page.getByTitle('Legacy smoke collection').locator('span')).toBeVisible();
   const saved=page.locator('.request-nav').filter({hasText:'Native saved request'});
   await expect(saved).toBeVisible();
