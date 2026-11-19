@@ -152,6 +152,22 @@ async function main() {
   await page.getByRole('button',{name:/Save request/}).click();
   await expect(page.locator('.toast')).toContainText('Request saved');
 
+  // Real installed WebView2 acceptance for v0.2.0 workspace UI: native
+  // dialogs, nested folder persistence, moving a Collection, and saved tabs.
+  page.once('dialog',dialog=>dialog.accept('Native / Smoke'));
+  await page.getByRole('button',{name:'New folder'}).click();
+  await expect(page.getByRole('button',{name:'Collapse folder Native'})).toBeVisible();
+  page.once('dialog',dialog=>dialog.accept('Native / Smoke'));
+  await page.getByRole('button',{name:'Move collection Legacy smoke collection to folder'}).click();
+  await expect(page.getByRole('button',{name:'Collapse folder Smoke'})).toBeVisible();
+  await page.getByRole('button',{name:'Open new request tab'}).click();
+  await page.getByRole('textbox',{name:'Request name'}).fill('Native second tab');
+  await page.getByRole('textbox',{name:'Request URL'}).fill('https://example.com/another-tab');
+  await page.getByRole('button',{name:/Save request/}).click();
+  await expect(page.locator('.toast')).toContainText('Request saved');
+  await expect(page.getByRole('tab',{name:'Open Native second tab'})).toBeVisible();
+  console.log('PASS: installed MSI native folder creation, Collection move, and additional saved tab');
+
   console.log('Native protected migration and saving passed. Restarting without a password.');
   await stop();
   page = await start(19321);
