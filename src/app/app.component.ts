@@ -291,10 +291,26 @@ export class AppComponent implements OnDestroy {
   private newTab(draft:RequestDraft,savedId:string|null,collectionId:string|null):OpenRequestTab {
     return {key:makeId(),savedId,draft:copyRequest(draft),collectionId,response:null,error:'',editorTab:'params',responseTab:'body',responseMode:'formatted'};
   }
+  private savedTabPreferences():{requestIds:string[];activeRequestId:string|null} {
+    // The active editor may have just been saved before its tab.savedId was
+    // synchronized; use the current activeRequestId to avoid losing that tab.
+    const ids=this.requestTabs.map(t=>t.key===this.activeTabKey?this.activeRequestId:t.savedId)
+      .filter((id):id is string=>!!id && this.workspace.collections.some(c=>c.requests.some(r=>r.id===id)));
+    const distinct=[...new Set(ids)].slice(0,MAX_EDITOR_TABS);
+    const active=this.activeRequestId && distinct.includes(this.activeRequestId)?this.activeRequestId:null;
+    return {requestIds:distinct,activeRequestId:active};
+  }
   private rememberOpenRequestTabs():void {
-    const ids=this.requestTabs.map(t=>t.savedId).filter((id):id is string=>!!id);
-    const active=this.activeRequestTab?.savedId??null;
-    writeTabPreferences(typeof localStorage==='undefined'?null:localStorage,{requestIds:ids,activeRequestId:active});
+    const preferences=this.savedTabPreferences();
+    if(this.isDesktop){
+      // localStorage is not reliably flushed by WebView2 during native shutdown.
+      // Persist IDs only inside the Windows-protected workspace instead.
+      if(this.vaultLocked || !this.secureWorkspace)return;
+      this.workspace.openTabState=preferences;
+      void this.persist();
+    } else {
+      writeTabPreferences(typeof localStorage==='undefined'?null:localStorage,preferences);
+    }
   }
   private syncActiveRequestTab():void {
     const tab=this.activeRequestTab;
@@ -320,7 +336,9 @@ export class AppComponent implements OnDestroy {
     this.responseMode=tab.responseMode;
   }
   private restoreRequestTabs():void {
-    const prefs=readTabPreferences(typeof localStorage==='undefined'?null:localStorage);
+    const prefs=this.isDesktop && this.workspace.openTabState
+      ? this.workspace.openTabState
+      : readTabPreferences(typeof localStorage==='undefined'?null:localStorage);
     const ids=resolveSavedTabIds(this.workspace,prefs);
     this.requestTabs=ids.map(id=>{
       const saved=this.workspace.collections.flatMap(c=>c.requests).find(x=>x.id===id)!;
@@ -464,6 +482,9 @@ export class AppComponent implements OnDestroy {
   async persist():Promise<boolean> {
     if (this.isDesktop) {
       if (this.vaultLocked || !this.secureWorkspace) return false;
+      // Snapshot active editor IDs at every committed write, including Save
+      // Request, before the tab.savedId catches up. No drafts are stored here.
+      this.workspace.openTabState=this.savedTabPreferences();
       try {
         await this.secureWorkspace.save(this.workspace);
         this.warning='';
