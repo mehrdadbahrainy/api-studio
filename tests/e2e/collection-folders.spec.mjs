@@ -1,0 +1,32 @@
+import {test,expect} from '@playwright/test';
+test('new nested folders and move Collection survive restart without losing requests',async({page})=>{
+  await page.goto('/');
+  page.once('dialog',dialog=>dialog.accept('Integrations / Payments'));
+  await page.getByRole('button',{name:'New folder'}).click();
+  await expect(page.getByRole('button',{name:'Collapse folder Integrations'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Collapse folder Payments'})).toBeVisible();
+  page.once('dialog',dialog=>dialog.accept('Integrations / Payments'));
+  await page.getByRole('button',{name:'Move collection Getting started to folder'}).click();
+  await expect(page.locator('.collection-title .truncate').filter({hasText:'Getting started'})).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button',{name:'Collapse folder Integrations'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Collapse folder Payments'})).toBeVisible();
+  await page.getByRole('button',{name:'Collapse folder Integrations'}).click();
+  await expect(page.getByRole('button',{name:'Collapse folder Payments'})).toHaveCount(0);
+  await page.getByRole('button',{name:'Expand folder Integrations'}).click();
+  await expect(page.locator('.request-nav').filter({hasText:'Get a sample TODO'})).toBeVisible();
+});
+test('moving a saved request between Collections via Save to keeps its ID and history',async({page})=>{
+  await page.goto('/');
+  await page.getByRole('button',{name:'New collection'}).click();
+  await page.getByPlaceholder('Collection name').fill('Moved requests');
+  await page.getByRole('button',{name:'Add',exact:true}).click();
+  await page.locator('.request-nav').filter({hasText:'Get a sample TODO'}).click();
+  const previous=await page.evaluate(()=>JSON.parse(localStorage.getItem('api-studio.workspace.v1')||'null'));
+  await page.getByRole('combobox',{name:'Destination collection'}).selectOption({label:'Moved requests'});
+  await page.getByRole('button',{name:/Save request/}).click();
+  await expect(page.locator('.toast')).toContainText('Request saved');
+  const next=await page.evaluate(()=>JSON.parse(localStorage.getItem('api-studio.workspace.v1')||'null'));
+  expect(next.collections.find(c=>c.name==='Moved requests').requests.map(r=>r.id)).toContain(previous.collections[0].requests[0].id);
+  expect(next.collections[0].requests).toHaveLength(0);
+});

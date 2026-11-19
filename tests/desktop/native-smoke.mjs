@@ -1,5 +1,5 @@
 /**
- * Native WebView2 acceptance test for a *real installed* API Studio v0.1.3 Windows binary.
+ * Native WebView2 acceptance test for the exact installed Windows CI build.
  * Runs on a disposable GitHub-hosted Windows runner. CDP is enabled exclusively via
  * a child-process environment variable. Never enable this in distributed releases.
  * Reference: https://playwright.dev/docs/webview2
@@ -90,6 +90,22 @@ async function main() {
 
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
   console.log('PASS: fresh installed Windows desktop opens without an app passphrase');
+  // About is available offline. Links are restricted to the official repository
+  // and open via the OS browser, never via embedded untrusted HTML.
+  await page.getByRole('button',{name:'Help and About'}).click();
+  const help=page.getByRole('dialog',{name:'API Studio'});
+  await expect(help).toBeVisible();
+  await expect(help.getByRole('link',{name:'Source code on GitHub'})).toHaveAttribute('href','https://github.com/mehrdadbahrainy/api-studio');
+  await expect(help.getByRole('link',{name:'Persian quickstart guide'})).toHaveAttribute('href',/QUICKSTART\.fa\.md$/);
+  await help.getByRole('button',{name:'Close Help and About'}).click();
+  await expect(help).toBeHidden();
+  console.log('PASS: installed WebView2 Help/About and source documentation links are accessible');
+  const rejectedExternal=await page.evaluate(async()=>{
+    try{await window.__TAURI_INTERNALS__.invoke('open_project_link',{url:'https://untrusted.example/'});return false;}
+    catch{return true;}
+  });
+  if(!rejectedExternal)throw new Error('Native project opener accepted an untrusted URL');
+  console.log('PASS: unsafe external URLs cannot be opened through native project link command');
   // Real installed MSI/WebView2 smoke for the new workspace navigation controls.
   const firstCollection=page.getByRole('button',{name:'Collapse Getting started'});
   await expect(firstCollection).toHaveAttribute('aria-expanded','true');
@@ -136,10 +152,62 @@ async function main() {
   await page.getByRole('button',{name:/Save request/}).click();
   await expect(page.locator('.toast')).toContainText('Request saved');
 
+  // Real installed WebView2 acceptance for v0.2.0 workspace UI: native
+  // dialogs, nested folder persistence, moving a Collection, and saved tabs.
+  page.once('dialog',dialog=>dialog.accept('Native / Smoke'));
+  await page.getByRole('button',{name:'New folder'}).click();
+  await expect(page.getByRole('button',{name:'Collapse folder Native'})).toBeVisible();
+  await expect(page.locator('.toast')).toContainText('Folder created');
+  page.once('dialog',dialog=>dialog.accept('Native / Smoke'));
+  await page.getByRole('button',{name:'Move collection Legacy smoke collection to folder'}).click();
+  await expect(page.getByRole('button',{name:'Collapse folder Smoke'})).toBeVisible();
+  await expect(page.locator('.toast')).toContainText('Collection moved');
+  await page.getByRole('button',{name:'Open new request tab'}).click();
+  const newRequestName=page.getByRole('textbox',{name:'Request name'});
+  await expect(newRequestName).toHaveValue('Untitled request');
+  // Installed WebView2 can coalesce a synthetic fill with Angular model updates
+  // when the tab was just created. Perform a real select-all/replace sequence.
+  await newRequestName.click();
+  await newRequestName.press('Control+A');
+  await newRequestName.press('Backspace');
+  await expect(newRequestName).toHaveValue('');
+  await newRequestName.pressSequentially('Native second tab');
+  await expect(newRequestName).toHaveValue('Native second tab');
+  await newRequestName.press('Tab');
+  await page.getByRole('textbox',{name:'Request URL'}).fill('https://example.com/another-tab');
+  await page.getByRole('button',{name:/Save request/}).click();
+  await expect(page.locator('.toast')).toContainText('Request saved');
+  await expect(page.getByRole('tab',{name:'Open Native second tab'})).toBeVisible();
+  // Reload inside the installed app to verify nonsecret tab IDs are restored
+  // from Windows-protected workspace, independent of WebView2 localStorage flush.
+  await page.reload();
+  await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
+  await expect(page.getByRole('tab',{name:'Open Native second tab'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Collapse folder Native'})).toBeVisible();
+  const tabPrefBeforeRestart=await page.evaluate(async()=>{
+    const raw=await window.__TAURI_INTERNALS__.invoke('read_protected_workspace');
+    const prefs=raw?JSON.parse(raw).openTabState:null;
+    return prefs?.requestIds.length??0;
+  });
+  if(tabPrefBeforeRestart<2)throw new Error('Saved tab IDs were not committed to Windows-protected workspace');
+  // Protected workspace writes are verified before the save confirmation;
+  // a short pause simulates an ordinary restart rather than a crash.
+  await delay(2500);
+  console.log('PASS: installed MSI native folder creation, Collection move, and saved tab restoration after WebView2 reload');
+
   console.log('Native protected migration and saving passed. Restarting without a password.');
   await stop();
   page = await start(19321);
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
+  await expect(page.getByRole('button',{name:'Collapse folder Native'})).toBeVisible();
+  const tabPrefAfterRestart=await page.evaluate(async()=>{
+    const raw=await window.__TAURI_INTERNALS__.invoke('read_protected_workspace');
+    const prefs=raw?JSON.parse(raw).openTabState:null;
+    return prefs?.requestIds.length??0;
+  });
+  console.log('Saved tab IDs after native process restart:',tabPrefAfterRestart);
+  if(tabPrefAfterRestart<2)throw new Error('Saved tab IDs were lost across installed app restart');
+  await expect(page.getByRole('tab',{name:'Open Native second tab'})).toBeVisible();
   await expect(page.getByTitle('Legacy smoke collection').locator('span')).toBeVisible();
   const saved=page.locator('.request-nav').filter({hasText:'Native saved request'});
   await expect(saved).toBeVisible();

@@ -2,6 +2,16 @@
 
 This file records public releases, not unfinished work. Installer files and SHA-256 checksums remain on [GitHub Releases](https://github.com/mehrdadbahrainy/api-studio/releases).
 
+## [v0.2.0](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.2.0) — 2026-11-19
+
+- Multi-request tabs with per-tab draft/response state, save-discard-cancel on close and saved-tab restoration after restart.
+- Nested Collection folders, moving Collections and moving saved requests between Collections without deleting existing requests.
+- Raw/Formatted response inspection for JSON, XML and HTML, safe text-only markup, bounded preview, Copy and Save Response.
+- Help/About with links to source, README, Persian guide, changelog, issue tracker and license.
+- Safe desktop startup/manual GitHub stable-release checks and an update-available notice with the official download link, no silent installation.
+- Native browser opening for allowlisted official project URLs.
+- Preserve Postman JSON import and DPAPI encrypted Windows storage, with updated unit, browser and installed Windows MSI acceptance.
+
 ## [v0.1.4](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.4) — 2026-11-17
 
 - Expand and collapse individual Collections or all at once, including imported Collections; preserve their layout preferences after restart.

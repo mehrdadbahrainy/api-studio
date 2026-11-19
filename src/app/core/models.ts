@@ -21,10 +21,11 @@ export interface RequestDraft {
   basicUsername: string;
   basicPassword: string;
 }
-export interface Collection { id: string; name: string; requests: RequestDraft[]; }
+export interface Folder { id:string; name:string; parentId:string|null; }
+export interface Collection { id: string; name: string; requests: RequestDraft[]; folderId?:string|null; }
 export interface Environment { id: string; name: string; variables: KeyValue[]; }
 export interface HistoryEntry { id: string; at: string; request: RequestDraft; status: number | null; durationMs: number | null; }
-export interface Workspace { version: 1; collections: Collection[]; environments: Environment[]; selectedEnvironmentId: string | null; history: HistoryEntry[]; }
+export interface Workspace { version: 1; collections: Collection[]; environments: Environment[]; selectedEnvironmentId: string | null; history: HistoryEntry[]; folders?:Folder[]; openTabState?: {requestIds:string[];activeRequestId:string|null}; }
 export interface HttpResult {
   status: number;
   statusText: string;

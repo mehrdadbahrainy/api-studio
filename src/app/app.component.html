@@ -19,35 +19,49 @@
         <div class="sidebar-heading"><span>YOUR COLLECTIONS <b>{{workspace.collections.length}}</b></span><div class="sidebar-heading-actions">
           <button type="button" class="subtle-icon" (click)="setAllCollectionsExpanded(false)" title="Collapse all collections" aria-label="Collapse all collections"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#chevrons-up"></use></svg></button>
           <button type="button" class="subtle-icon" (click)="setAllCollectionsExpanded(true)" title="Expand all collections" aria-label="Expand all collections"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#chevrons-down"></use></svg></button>
+          <button type="button" class="subtle-icon" (click)="createFolder()" title="New folder" aria-label="New folder"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#folder"></use></svg></button>
           <button type="button" class="subtle-icon new-collection-action" (click)="showCreateCollection=true" title="New collection" aria-label="New collection"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#plus"></use></svg></button>
         </div></div>
         <label class="search-box"><svg class="ui-icon search-symbol" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#search"></use></svg><input [(ngModel)]="filter" placeholder="Filter requests..." aria-label="Filter requests"></label>
         @if (showCreateCollection) {
           <form class="inline-new" (submit)="$event.preventDefault();createCollection()"><input [(ngModel)]="newCollectionName" name="newCollectionName" placeholder="Collection name" maxlength="120" autofocus><button type="submit">Add</button><button type="button" (click)="showCreateCollection=false" class="icon-button" aria-label="Cancel collection"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button></form>
         }
-        @for (collection of filteredCollections; track collection.id) {
-          <div class="collection-group" [class.collection-is-collapsed]="!isCollectionExpanded(collection.id)">
-            <div class="collection-title" [title]="collection.name">
-              <button type="button" class="collection-toggle" (click)="toggleCollection(collection.id)" [attr.aria-expanded]="isCollectionExpanded(collection.id)" [attr.aria-controls]="'collection-requests-'+collection.id" [attr.aria-label]="(isCollectionExpanded(collection.id)?'Collapse ':'Expand ')+collection.name">
-                <svg class="ui-icon collection-chevron" viewBox="0 0 24 24" aria-hidden="true"><use [attr.href]="isCollectionExpanded(collection.id)?'assets/lucide.svg#chevron-down':'assets/lucide.svg#chevron-right'"></use></svg>
+        @for (entry of navigationItems; track entry.key) {
+          @if(entry.folder;as folder){
+            <div class="folder-tree-row" [style.padding-left.px]="entry.depth*13">
+              <button type="button" class="folder-tree-toggle" (click)="toggleFolder(folder.id)"
+                [attr.aria-expanded]="isFolderExpanded(folder.id)" [attr.aria-label]="(isFolderExpanded(folder.id)?'Collapse folder ':'Expand folder ')+folder.name">
+                <svg class="ui-icon folder-chevron" viewBox="0 0 24 24" aria-hidden="true"><use [attr.href]="isFolderExpanded(folder.id)?'assets/lucide.svg#chevron-down':'assets/lucide.svg#chevron-right'"></use></svg>
                 <svg class="ui-icon folder-glyph" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#folder"></use></svg>
-                <span class="truncate">{{collection.name}}</span>
-                <small>{{collection.requests.length}}</small>
+                <span class="truncate">{{folder.name}}</span>
               </button>
-              <button class="collection-delete icon-button" type="button" (click)="deleteCollection(collection)" [attr.aria-label]="'Delete ' + collection.name" title="Delete collection"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#trash-2"></use></svg></button>
+              <button type="button" class="folder-delete icon-button" (click)="deleteFolder(folder)" [attr.aria-label]="'Remove folder '+folder.name" title="Remove folder but keep its Collections"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button>
             </div>
-            @if (isCollectionExpanded(collection.id)) {
-              <div class="collection-requests" [id]="'collection-requests-'+collection.id">
-                @for (req of collection.requests; track req.id) {
-                  <button class="request-nav" type="button" (click)="selectRequest(req)" [class.active]="activeRequestId===req.id" [title]="req.url">
-                    <span class="method-mini" [ngClass]="methodStyle(req.method)">{{req.method}}</span><span class="truncate">{{req.name}}</span>
-                  </button>
-                } @empty {
-                  <p class="collection-empty">No saved requests</p>
-                }
+          }@else if(entry.collection;as collection){
+            <div class="collection-group" [style.margin-left.px]="entry.depth*13" [class.collection-is-collapsed]="!isCollectionExpanded(collection.id)">
+              <div class="collection-title" [title]="collection.name">
+                <button type="button" class="collection-toggle" (click)="toggleCollection(collection.id)" [attr.aria-expanded]="isCollectionExpanded(collection.id)" [attr.aria-controls]="'collection-requests-'+collection.id" [attr.aria-label]="(isCollectionExpanded(collection.id)?'Collapse ':'Expand ')+collection.name">
+                  <svg class="ui-icon collection-chevron" viewBox="0 0 24 24" aria-hidden="true"><use [attr.href]="isCollectionExpanded(collection.id)?'assets/lucide.svg#chevron-down':'assets/lucide.svg#chevron-right'"></use></svg>
+                  <svg class="ui-icon folder-glyph" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#folder"></use></svg>
+                  <span class="truncate">{{entry.label}}</span>
+                  <small>{{collection.requests.length}}</small>
+                </button>
+                <button type="button" class="collection-move icon-button" (click)="moveCollectionToFolder(collection)" [attr.aria-label]="'Move collection '+collection.name+' to folder'" title="Move to folder"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#arrow-right"></use></svg></button>
+                <button class="collection-delete icon-button" type="button" (click)="deleteCollection(collection)" [attr.aria-label]="'Delete ' + collection.name" title="Delete collection"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#trash-2"></use></svg></button>
               </div>
-            }
-          </div>
+              @if (isCollectionExpanded(collection.id)) {
+                <div class="collection-requests" [id]="'collection-requests-'+collection.id">
+                  @for (req of entry.requests; track req.id) {
+                    <button class="request-nav" type="button" (click)="selectRequest(req)" [class.active]="activeRequestId===req.id" [title]="req.url">
+                      <span class="method-mini" [ngClass]="methodStyle(req.method)">{{req.method}}</span><span class="truncate">{{req.name}}</span>
+                    </button>
+                  } @empty {
+                    <p class="collection-empty">No saved requests</p>
+                  }
+                </div>
+              }
+            </div>
+          }
         } @empty {
           <div class="sidebar-empty">No matching collections</div>
         }
@@ -65,6 +79,7 @@
     <div class="sidebar-bottom">
       <div class="sidebar-signal"><span class="signal-dot"></span><span>{{isDesktop?'Desktop mode':'Browser preview'}}</span><span class="signal-right">{{isDesktop?'Native HTTP':'CORS applies'}}</span></div>
       <p>{{isDesktop?'Requests run locally on your machine. No account needed.':'Install the desktop app for unrestricted API testing.'}}</p>
+      <button type="button" class="sidebar-help-link" (click)="openHelp()">Help, docs &amp; source</button>
     </div>
     <div class="sidebar-resize-handle" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin="228" aria-valuemax="480" [attr.aria-valuenow]="sidebarWidth" [attr.tabindex]="sidebarCollapsed?-1:0" title="Drag to resize, or use arrow keys" (pointerdown)="beginSidebarResize($event)" (keydown)="resizeSidebarFromKeyboard($event)"><span class="resize-grip"></span></div>
   </aside>
@@ -74,23 +89,46 @@
       <div class="crumbs"><span>Workspace</span><span class="crumb-sep">/</span><strong>{{requestTitle}}</strong></div>
       <div class="top-actions">
         <button type="button" class="environment-button" (click)="toggleEnvironmentDialog()" aria-label="Edit environments"><svg class="ui-icon env-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#settings"></use></svg><span>{{activeEnvironment?.name??'No environment'}}</span><svg class="ui-icon downchevron" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#chevron-down"></use></svg></button>
+        <button type="button" class="header-icon-button help-top-button" (click)="openHelp()" title="Help and About" aria-label="Help and About"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#circle-help"></use></svg></button>
         <button type="button" class="header-icon-button" title="New request (Ctrl+N)" aria-label="New request" (click)="newRequest()"><svg class="ui-icon" viewBox="0 0 24 24"><use href="assets/lucide.svg#plus"></use></svg></button>
         <div class="menu-container">
           <button type="button" class="header-icon-button ellipsis" (click)="showMenu=!showMenu" title="Workspace actions" aria-label="Workspace actions"><svg class="ui-icon" viewBox="0 0 24 24"><use href="assets/lucide.svg#ellipsis"></use></svg></button>
-          @if (showMenu) {<div class="menu-popover"><button (click)="exportWorkspace()">Export workspace as JSON</button><label class="import-choice">Import JSON (API Studio / Postman)<input type="file" accept=".json,application/json" (change)="importWorkspace($event)" hidden></label><button (click)="duplicateRequest();closePopup()">Duplicate request</button>@if(isDesktop){<button (click)="showSecurityDialog=true;securityError='';closePopup()">Security settings</button>}<button (click)="checkUpdates()">Check for updates</button>@if(isSaved){<button class="danger" (click)="deleteRequest();closePopup()">Delete saved request</button>}</div>}
+          @if (showMenu) {<div class="menu-popover"><button (click)="exportWorkspace()">Export workspace as JSON</button><label class="import-choice">Import JSON (API Studio / Postman)<input type="file" accept=".json,application/json" (change)="importWorkspace($event)" hidden></label><button (click)="duplicateRequest();closePopup()">Duplicate request</button>@if(isDesktop){<button (click)="showSecurityDialog=true;securityError='';closePopup()">Security settings</button>}<button (click)="openHelp()">Help &amp; About</button><button (click)="openHelp();checkUpdates()">Check for updates</button>@if(isSaved){<button class="danger" (click)="deleteRequest();closePopup()">Delete saved request</button>}</div>}
         </div>
       </div>
     </header>
 
+
+    <nav class="open-request-tabs" role="tablist" aria-label="Open requests">
+      @for(tab of requestTabs;track tab.key){
+        <div class="open-request-tab" [class.active]="tab.key===activeTabKey">
+          <button type="button" class="open-tab-select" role="tab" [attr.aria-selected]="tab.key===activeTabKey"
+            [attr.aria-label]="'Open '+tab.draft.name" (click)="switchRequestTab(tab.key)"
+            [title]="tab.draft.name">
+            <span class="tab-method" [ngClass]="methodStyle(tab.draft.method)">{{tab.draft.method}}</span>
+            <span class="tab-name">{{tab.draft.name || 'Untitled request'}}</span>
+            @if(isTabDirty(tab)){<span class="unsaved-dot" title="Unsaved changes" aria-label="Unsaved changes"></span>}
+          </button>
+          <button type="button" class="close-request-tab" [attr.aria-label]="'Close tab '+tab.draft.name"
+            title="Close tab (Ctrl+W)" (click)="requestCloseTab(tab.key)">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg>
+          </button>
+        </div>
+      }
+      <button type="button" class="new-request-tab" (click)="newRequest()" title="Open new request tab" aria-label="Open new request tab">
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#plus"></use></svg>
+      </button>
+    </nav>
     <div class="page-content">
       <div class="headline">
-        <div><p class="kicker">REQUEST BUILDER</p><h1><input class="request-name-input" [(ngModel)]="draft.name" maxlength="160" aria-label="Request name" placeholder="Untitled request"></h1><p class="subline">Create, send, and inspect HTTP requests. Everything stays on your device.</p></div>
-        <div class="headline-actions"><label class="collection-selector"><span>Save to</span><select [(ngModel)]="activeCollectionId" aria-label="Destination collection">@for(collection of workspace.collections;track collection.id){<option [ngValue]="collection.id">{{collection.name}}</option>}</select></label><button type="button" class="button outline" (click)="duplicateRequest()">Duplicate</button><button type="button" class="button outline" (click)="saveRequest()" title="Save request (Ctrl+S)"><svg class="ui-icon" viewBox="0 0 24 24"><use href="assets/lucide.svg#save"></use></svg> Save request</button></div>
+        <div><p class="kicker">REQUEST BUILDER</p><h1><input class="request-name-input" [(ngModel)]="draft.name" maxlength="160" aria-label="Request name" placeholder="Untitled request"><span class="draft-indicator" [class.is-dirty]="activeRequestTab && isTabDirty(activeRequestTab)">{{activeRequestTab && isTabDirty(activeRequestTab)?'Unsaved changes':'Saved'}}</span></h1><p class="subline">Create, send, and inspect HTTP requests. Everything stays on your device.</p></div>
+        <div class="headline-actions"><label class="collection-selector" title="Selecting another Collection and saving moves this request"><span>Save to / Move</span><select [ngModel]="activeCollectionId" (ngModelChange)="onCollectionSelection($event)" aria-label="Destination collection">@for(collection of workspace.collections;track collection.id){<option [ngValue]="collection.id">{{collection.name}}</option>}</select></label><button type="button" class="button outline" (click)="renameCurrentRequest()">Rename</button><button type="button" class="button outline" (click)="duplicateRequest()">Duplicate</button><button type="button" class="button outline" (click)="saveRequest()" title="Save request (Ctrl+S)"><svg class="ui-icon" viewBox="0 0 24 24"><use href="assets/lucide.svg#save"></use></svg> Save request</button></div>
       </div>
 
       @if (warning) {<div class="alert warning"><span>!</span>{{warning}}<button type="button" (click)="warning=''" aria-label="Dismiss warning"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button></div>}
       @if (!isDesktop) {<div class="alert info"><span>i</span><span>Browser preview: cross-origin requests are subject to CORS. The desktop app sends requests through Tauri's native HTTP client.</span></div>}
-      @if (updateInfo) {<div class="alert info"><span>i</span><span>{{updateInfo}} <a [href]="releasesPage" target="_blank" rel="noopener noreferrer">GitHub Releases</a></span><button type="button" (click)="updateInfo=''" aria-label="Dismiss update status"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button></div>}
+      @if (updateStatus?.updateAvailable) {<div class="alert update-available" role="status"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#arrow-up-circle"></use></svg><span>New version {{updateStatus?.latestVersion}} is available.</span><button type="button" class="button outline" (click)="openHelp()">View update</button></div>}
+      @if (updateInfo && !updateStatus?.updateAvailable) {<div class="alert info"><span>i</span><span>{{updateInfo}} <a [href]="releasesPage" (click)="openProjectLink($event,releasesPage)" target="_blank" rel="noopener noreferrer">GitHub Releases</a></span><button type="button" (click)="updateInfo=''" aria-label="Dismiss update status"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button></div>}
       @if (error) {<div class="alert error" role="alert"><span>!</span><span>{{error}}</span><button type="button" (click)="error=''" aria-label="Dismiss error"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button></div>}
 
       <section class="request-section card" aria-label="HTTP request">
@@ -152,17 +190,91 @@
             @else{<span class="awaiting-label">Waiting for a request</span>}
           </div>
         </div>
-        <div class="response-tools"><div class="response-tabs"><button (click)="responseTab='body'" [class.active]="responseTab==='body'">Body</button><button (click)="responseTab='headers'" [class.active]="responseTab==='headers'">Headers @if(response){<span>{{response.headers.length}}</span>}</button></div><button type="button" class="copy-button" (click)="copyResponse()" [disabled]="!response"><svg class="ui-icon" viewBox="0 0 24 24"><use href="assets/lucide.svg#copy"></use></svg> Copy</button></div>
+        <div class="response-tools">
+          <div class="response-tabs">
+            <button type="button" (click)="responseTab='body'" [class.active]="responseTab==='body'">Body</button>
+            <button type="button" (click)="responseTab='headers'" [class.active]="responseTab==='headers'">Headers @if(response){<span>{{response.headers.length}}</span>}</button>
+          </div>
+          @if(response && responseTab==='body' && !response.binary){
+            <div class="response-format-control" aria-label="Response view format">
+              <button type="button" [class.active]="responseMode==='formatted'" (click)="responseMode='formatted'">Formatted</button>
+              <button type="button" [class.active]="responseMode==='raw'" (click)="responseMode='raw'">Raw</button>
+            </div>
+          }
+          <button type="button" class="copy-button" (click)="copyResponse()" [disabled]="!response"><svg class="ui-icon" viewBox="0 0 24 24"><use href="assets/lucide.svg#copy"></use></svg> Copy</button>
+          <button type="button" class="copy-button" (click)="saveResponse()" [disabled]="!response || response.binary">Save response</button>
+        </div>
         @if(running){<div class="response-empty"><div class="pulse-mark"></div><h3>Sending request...</h3><p>Connecting to the server</p></div>}
         @else if (response) {
-          @if(responseTab==='body') {<pre class="response-code" tabindex="0">{{response.body}}</pre>}
+          @if(responseTab==='body') {
+            @if(currentResponsePreview;as preview){
+              @if(preview.truncated){<div class="large-response-note" role="status">Large response: preview limited to 500,000 characters. Copy or Save to access the full text.</div>}
+              <div class="response-kind-label">{{preview.kind | uppercase}} · {{responseMode==='formatted'?'Formatted':'Raw'}}</div>
+              <pre class="response-code" tabindex="0">{{preview.text}}</pre>
+            }
+          }
           @else {<div class="response-headers">@for(header of response.headers;track header.id){<div><span>{{header.key}}</span><code>{{header.value}}</code></div>}</div>}
-        } @else {<div class="response-empty"><div class="response-empty-icon">&lt;/&gt;</div><h3>Ready when you are</h3><p>Send a request to see the response here.</p><span class="hint-chip">GET · POST · PUT · PATCH · DELETE</span></div>}
+        } @else if(error){<div class="response-empty response-error-state"><div class="response-empty-icon">!</div><h3>{{error==='Request cancelled.'?'Request cancelled':'Could not complete request'}}</h3><p>{{error}}</p></div>}
+        @else {<div class="response-empty"><div class="response-empty-icon">&lt;/&gt;</div><h3>Ready when you are</h3><p>Send a request to see the response here.</p><span class="hint-chip">GET · POST · PUT · PATCH · DELETE</span></div>}
       </section>
       <footer class="status-footer"><span><span class="footer-indicator"></span>API Studio <span class="footer-divider">•</span> Local-first REST workspace</span><span>{{totalRequests}} saved requests <span class="footer-divider">•</span> {{workspace.history.length}} history entries</span></footer>
     </div>
   </main>
 </div>
+
+@if(showHelp){
+  <div class="modal-backdrop" (click)="showHelp=false">
+    <section class="modal help-about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-heading" (click)="$event.stopPropagation()">
+      <header class="modal-heading">
+        <div><p class="kicker">HELP &amp; ABOUT</p><h2 id="about-heading">API Studio</h2><p>Local-first REST API client for developers, built with Angular and Tauri.</p></div>
+        <button class="modal-close" type="button" (click)="showHelp=false" aria-label="Close Help and About"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button>
+      </header>
+      <div class="modal-body help-about-content">
+        <div class="help-version-row">
+          <div><span class="help-field-label">Installed version</span><strong>v{{updateStatus?.installedVersion??version}}</strong></div>
+          <div><span class="help-field-label">Latest stable version</span><strong>{{updateStatus?.latestVersion??'Not checked'}}</strong></div>
+          <button class="button outline" type="button" [disabled]="checkingUpdates" (click)="checkUpdates()">{{checkingUpdates?'Checking GitHub…':'Check for updates'}}</button>
+        </div>
+        @if(updateStatus?.updateAvailable){
+          <div class="help-update-message" role="status"><strong>Update available: {{updateStatus?.latestVersion}}</strong><p>Download the verified installer from GitHub. Updates are never installed automatically. Export a private workspace backup before upgrading.</p>
+          <a class="button primary" [href]="updateStatus?.releaseUrl" (click)="openProjectLink($event,updateStatus?.releaseUrl??releasesPage)" target="_blank" rel="noopener noreferrer">Open release &amp; download</a></div>
+        }@else if(updateStatus?.latestVersion){
+          <p class="help-up-to-date" role="status">No newer stable release is available.</p>
+        }
+        @if(updateCheckError){<p class="help-update-error" role="alert">{{updateCheckError}}</p>}
+        <div class="help-guide">
+          <h3>How to use API Studio</h3>
+          <p>Create a request, select an HTTP method and URL, then Send. Save it in a Collection, organize requests in folders or tabs, and inspect the returned status, headers and body. Workspace actions can import Postman Collection or Environment JSON and export a private backup.</p>
+          <p><strong>Shortcuts:</strong> Ctrl+Enter sends, Ctrl+S saves, Ctrl+N opens a new request, Ctrl+W closes the current tab.</p>
+        </div>
+        <div class="help-links" aria-label="Project resources">
+          <a [href]="sourcePage" (click)="openProjectLink($event,sourcePage)" target="_blank" rel="noopener noreferrer">Source code on GitHub</a>
+          <a [href]="docsPage" (click)="openProjectLink($event,docsPage)" target="_blank" rel="noopener noreferrer">README documentation</a>
+          <a [href]="persianGuidePage" (click)="openProjectLink($event,persianGuidePage)" target="_blank" rel="noopener noreferrer">Persian quickstart guide</a>
+          <a [href]="changelogPage" (click)="openProjectLink($event,changelogPage)" target="_blank" rel="noopener noreferrer">Changelog</a>
+          <a [href]="issuesPage" (click)="openProjectLink($event,issuesPage)" target="_blank" rel="noopener noreferrer">Report an issue</a>
+          <a [href]="licensePage" (click)="openProjectLink($event,licensePage)" target="_blank" rel="noopener noreferrer">MIT license</a>
+          <a [href]="releasesPage" target="_blank" rel="noopener noreferrer">All releases</a>
+        </div>
+        <p class="help-note">Update checks connect to GitHub Releases. The installer is not downloaded automatically. Workspace exports may contain tokens and are not encrypted.</p>
+      </div>
+    </section>
+  </div>
+}
+@if(pendingCloseTabKey){
+  <div class="modal-backdrop" (click)="resolveCloseTab('cancel')">
+    <section class="modal close-tab-dialog" role="dialog" aria-modal="true" aria-labelledby="close-tab-heading" (click)="$event.stopPropagation()">
+      <header class="modal-heading">
+        <div><p class="kicker">UNSAVED CHANGES</p><h2 id="close-tab-heading">Close this request?</h2><p>The request has changes that have not been saved to a Collection.</p></div>
+      </header>
+      <div class="modal-body close-tab-actions">
+        <button type="button" class="button outline" (click)="resolveCloseTab('cancel')">Keep editing</button>
+        <button type="button" class="button outline close-discard" (click)="resolveCloseTab('discard')">Discard changes</button>
+        <button type="button" class="button primary" (click)="resolveCloseTab('save')">Save and close</button>
+      </div>
+    </section>
+  </div>
+}
 @if(showEnvironments){
   <div class="modal-backdrop" (click)="showEnvironments=false">
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="env-heading" (click)="$event.stopPropagation()">

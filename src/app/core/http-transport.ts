@@ -1,7 +1,7 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { fetch as nativeFetch } from '@tauri-apps/plugin-http';
 import { Environment, HttpResult, RequestDraft, row } from './models';
-import { prepareRequest, prettyBody } from './request-utils';
+import { prepareRequest } from './request-utils';
 import { describeNetworkError } from './network-errors';
 
 const MAX_DISPLAY_BYTES = 5 * 1024 * 1024;
@@ -47,7 +47,7 @@ async function sendWithController(url: string, init: RequestInit, signal: AbortS
     } else {
       binary = /(?:application\/octet-stream|image\/|audio\/|video\/|application\/pdf)/i.test(contentType);
       body = binary ? 'Binary response received. Body preview is not available in this version.'
-        : prettyBody(new TextDecoder('utf-8').decode(buffer), contentType);
+        : new TextDecoder('utf-8').decode(buffer);
     }
   }
   return {status:response.status,statusText:response.statusText,durationMs:elapsed,sizeBytes,headers:[...response.headers.entries()].map(([key,value])=>row(key,value)),body,contentType,binary};
