@@ -1,4 +1,5 @@
 import { Collection, Environment, Folder, HistoryEntry, KeyValue, RequestDraft, Workspace, copyRequest, freshRequest, initialWorkspace, makeId } from './models';
+import { parseTabPreferences, resolveSavedTabIds } from './editor-tab-state';
 const MAX_COLLECTIONS = 150;
 const MAX_REQUESTS = 2000;
 const MAX_HISTORY = 80;
@@ -57,7 +58,19 @@ export function parseWorkspace(raw: unknown): Workspace {
   const environments:Environment[]=input.environments.slice(0,80).map((e:any)=>({id:typeof e?.id==='string'?e.id:makeId(),name:String(e?.name??'Environment').slice(0,120),variables:cleanRows(e?.variables)}));
   const history:HistoryEntry[]=Array.isArray(input.history)?input.history.slice(0,MAX_HISTORY).filter((h:any)=>h && typeof h==='object').map((h:any)=>({id:typeof h.id==='string'?h.id:makeId(),at:String(h.at??''),request:redactHistoryRequest(parseRequest(h.request??{},null)),status:typeof h.status==='number'?h.status:null,durationMs:typeof h.durationMs==='number'?h.durationMs:null})):[];
   const selectedEnvironmentId=environments.some(e=>e.id===input.selectedEnvironmentId)?input.selectedEnvironmentId:null;
-  return {version:1,collections,environments,selectedEnvironmentId,history,...(folders.length?{folders}:{})};
+  // Saved tab IDs are nonsecret UI navigation metadata. Preserve them within
+  // the *encrypted* Windows workspace because WebView2 localStorage is not
+  // guaranteed to flush before process shutdown. Old backups omit this field.
+  const base:Workspace={version:1,collections,environments,selectedEnvironmentId,history,...(folders.length?{folders}:{})};
+  if(input.openTabState!==undefined){
+    const prefs=parseTabPreferences(JSON.stringify(input.openTabState));
+    const validIds=resolveSavedTabIds(base,prefs);
+    base.openTabState={
+      requestIds:validIds,
+      activeRequestId:prefs.activeRequestId && validIds.includes(prefs.activeRequestId)?prefs.activeRequestId:null
+    };
+  }
+  return base;
 }
 export function safeLoad(raw:string|null): Workspace {
   if (!raw) return initialWorkspace();
