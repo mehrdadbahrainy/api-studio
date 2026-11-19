@@ -81,7 +81,7 @@ fn open_project_link(app: tauri::AppHandle, url: String) -> Result<(), String> {
     if !fixed.iter().any(|known| known == &url) && !release {
         return Err("Unsupported external URL. Only official API Studio project links are allowed.".into());
     }
-    app.opener().open_url(url, None::<&str>())
+    app.opener().open_url(url, None::<&str>)
         .map_err(|_| "Could not open the link in the default browser.".to_string())
 }
 
