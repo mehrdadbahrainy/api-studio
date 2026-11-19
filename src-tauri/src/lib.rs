@@ -2,6 +2,7 @@ mod system_vault;
 use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
+use tauri_plugin_opener::OpenerExt;
 
 const ENCRYPTED_FILE: &str = "workspace.encrypted.json";
 const LEGACY_STRONGHOLD: &str = "workspace.stronghold";
@@ -58,11 +59,39 @@ fn write_encrypted_workspace(app: tauri::AppHandle, payload: String) -> Result<(
     Ok(())
 }
 
+/** Only approved GitHub project resources may open in the user's default browser. */
+#[tauri::command]
+fn open_project_link(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    const BASE: &str = "https://github.com/mehrdadbahrainy/api-studio";
+    let fixed = [
+        BASE.to_string(),
+        format!("{BASE}/blob/main/README.md"),
+        format!("{BASE}/blob/main/QUICKSTART.fa.md"),
+        format!("{BASE}/blob/main/CHANGELOG.md"),
+        format!("{BASE}/blob/main/LICENSE"),
+        format!("{BASE}/issues"),
+        format!("{BASE}/releases"),
+    ];
+    let release = url.strip_prefix(&format!("{BASE}/releases/tag/v"))
+        .is_some_and(|tag| {
+            tag.len() <= 24
+                && tag.split('.').count() == 3
+                && tag.split('.').all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
+        });
+    if !fixed.iter().any(|known| known == &url) && !release {
+        return Err("Unsupported external URL. Only official API Studio project links are allowed.".into());
+    }
+    app.opener().open_url(url, None::<&str>())
+        .map_err(|_| "Could not open the link in the default browser.".to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
+            open_project_link,
             read_encrypted_workspace,
             write_encrypted_workspace,
             legacy_stronghold_exists,

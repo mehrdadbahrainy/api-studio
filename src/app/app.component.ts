@@ -46,7 +46,7 @@ export class AppComponent implements OnDestroy {
   readonly changelogPage=CHANGELOG_URL;
   readonly issuesPage=ISSUES_URL;
   readonly licensePage=LICENSE_URL;
-  readonly version='0.1.4';
+  readonly version='0.2.0';
   readonly collapsedSidebarWidth=COLLAPSED_SIDEBAR_WIDTH;
   vaultLocked=false;
   vaultStarting=false;
@@ -195,6 +195,12 @@ export class AppComponent implements OnDestroy {
     finally{this.securityWorking=false;}
   }
   openHelp():void { this.showMenu=false;this.showHelp=true; }
+  async openProjectLink(event:MouseEvent,url:string):Promise<void> {
+    if(!this.isDesktop)return;
+    event.preventDefault();
+    try{await invoke('open_project_link',{url});}
+    catch{this.inform('Could not open your browser. Copy the GitHub URL from the Help page.');}
+  }
   async checkUpdates(silent=false):Promise<void> {
     if(this.checkingUpdates)return;
     this.closePopup();this.checkingUpdates=true;this.updateCheckError='';

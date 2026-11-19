@@ -4,7 +4,7 @@ API Studio is a local-first Angular + Tauri REST client. Focus on usability, pre
 
 ## Project references
 
-- [Latest release — v0.1.4](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.4) · [Changelog](CHANGELOG.md) · [Persian quickstart](QUICKSTART.fa.md)
+- [Latest release](https://github.com/mehrdadbahrainy/api-studio/releases/latest) · [Changelog](CHANGELOG.md) · [Persian quickstart](QUICKSTART.fa.md)
 - [Issues](https://github.com/mehrdadbahrainy/api-studio/issues) for reproducible bugs and approved work; [Pull Requests](https://github.com/mehrdadbahrainy/api-studio/pulls) for review and evidence.
 - [Roadmap through v0.4.0](https://docs.google.com/document/d/1c_9gC-7vhMQzgogBgm7DevEEXRd6-hEq9JKLcoTYneg/edit) for product decisions and acceptance criteria. Product-direction changes require the owner's approval.
 
@@ -31,4 +31,4 @@ Stable releases must use the **exact source SHA** that passed unit checks, TypeS
 
 [v0.1.4 full CI](https://github.com/mehrdadbahrainy/api-studio/actions/runs/44063915754) and [release workflow](https://github.com/mehrdadbahrainy/api-studio/actions/runs/44065235512) both succeeded. Additional releases must repeat the gates. CI does not guarantee compatibility with every Windows machine.
 
-The planned script-free API Scenario Runner and later Git/CLI/JUnit/Actions support are **not** features of v0.1.4.
+The planned script-free API Scenario Runner and later Git/CLI/JUnit/Actions support are **not** features of v0.2.0. Keep Help/About URLs restricted to official project destinations; do not execute remote release artifacts or Postman scripts automatically.

@@ -1,5 +1,5 @@
 /**
- * Native WebView2 acceptance test for a *real installed* API Studio v0.1.3 Windows binary.
+ * Native WebView2 acceptance test for the exact installed Windows CI build.
  * Runs on a disposable GitHub-hosted Windows runner. CDP is enabled exclusively via
  * a child-process environment variable. Never enable this in distributed releases.
  * Reference: https://playwright.dev/docs/webview2
@@ -90,6 +90,22 @@ async function main() {
 
   await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
   console.log('PASS: fresh installed Windows desktop opens without an app passphrase');
+  // About is available offline. Links are restricted to the official repository
+  // and open via the OS browser, never via embedded untrusted HTML.
+  await page.getByRole('button',{name:'Help and About'}).click();
+  const help=page.getByRole('dialog',{name:'API Studio'});
+  await expect(help).toBeVisible();
+  await expect(help.getByRole('link',{name:'Source code on GitHub'})).toHaveAttribute('href','https://github.com/mehrdadbahrainy/api-studio');
+  await expect(help.getByRole('link',{name:'Persian quickstart guide'})).toHaveAttribute('href',/QUICKSTART\.fa\.md$/);
+  await help.getByRole('button',{name:'Close Help and About'}).click();
+  await expect(help).toBeHidden();
+  console.log('PASS: installed WebView2 Help/About and source documentation links are accessible');
+  const rejectedExternal=await page.evaluate(async()=>{
+    try{await window.__TAURI_INTERNALS__.invoke('open_project_link',{url:'https://untrusted.example/'});return false;}
+    catch{return true;}
+  });
+  if(!rejectedExternal)throw new Error('Native project opener accepted an untrusted URL');
+  console.log('PASS: unsafe external URLs cannot be opened through native project link command');
   // Real installed MSI/WebView2 smoke for the new workspace navigation controls.
   const firstCollection=page.getByRole('button',{name:'Collapse Getting started'});
   await expect(firstCollection).toHaveAttribute('aria-expanded','true');

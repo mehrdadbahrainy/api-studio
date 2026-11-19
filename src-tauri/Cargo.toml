@@ -1,6 +1,6 @@
 [package]
 name = "api_studio"
-version = "0.1.4"
+version = "0.2.0"
 description = "Local-first REST API client"
 authors = ["Community contributors"]
 license = "MIT"
@@ -16,6 +16,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
+tauri-plugin-opener = "2"
 
 [profile.dev.package.scrypt]
 opt-level = 3

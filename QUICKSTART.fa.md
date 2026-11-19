@@ -2,21 +2,31 @@
 
 **API Studio** یک ابزار سبک و محلی برای ساخت، ارسال و مدیریت درخواست‌های REST API است. برای استفاده از برنامه نیازی به ایجاد حساب کاربری یا سرویس ابری ندارید.
 
-**آخرین نسخه پایدار: [v0.1.4 برای ویندوز ۶۴ بیتی](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.4)**
+**[دریافت آخرین نسخه پایدار برای ویندوز ۶۴ بیتی](https://github.com/mehrdadbahrainy/api-studio/releases/latest)**
 
 ## دانلود و نصب
 
-در صفحه [Release نسخه v0.1.4](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.1.4) این سه فایل موجود است:
+در صفحه [آخرین نسخه منتشرشده](https://github.com/mehrdadbahrainy/api-studio/releases/latest) فایل‌های زیر را دریافت کنید:
 
-- `API.Studio_0.1.4_x64-setup.exe` — نصب‌کننده EXE
-- `API.Studio_0.1.4_x64_en-US.msi` — نصب‌کننده MSI
+- `API.Studio_0.2.0_x64-setup.exe` — نصب‌کننده EXE
+- `API.Studio_0.2.0_x64_en-US.msi` — نصب‌کننده MSI
 - `SHA256SUMS.txt` — بررسی صحت فایل دانلودشده
 
 فایل‌های نصب هنوز امضای دیجیتال ندارند و ممکن است ویندوز هشدار ناشر ناشناس نمایش دهد. نسخه قدیمی Preview یعنی v0.1.1 برای نصب جدید توصیه نمی‌شود.
 
+## قابلیت‌های نسخه v0.2.0
+
+- تب‌های هم‌زمان برای Requestها با پیش‌نویس و نمایش پاسخ مستقل، نشانگر تغییر ذخیره‌نشده و امکان Save/Discard/Cancel هنگام بستن تب.
+- ساخت Folderهای تو‌در‌تو و انتقال Collection به Folder، بدون حذف Requestها.
+- انتقال Request ذخیره‌شده به Collection دیگر از طریق **Save to / Move** و سپس **Save request**.
+- نمایش پاسخ در حالت Raw یا Formatted برای JSON، XML و HTML. کد HTML اجرا نمی‌شود، فقط به‌صورت متن نمایش داده می‌شود.
+- کپی یا ذخیره متن پاسخ در فایل. فایل خروجی رمزگذاری نمی‌شود و ممکن است اطلاعات حساس داشته باشد.
+- پنجره **Help / About** شامل نسخه نصب‌شده، راهنما و لینک سورس، مستندات، راهنمای فارسی، CHANGELOG و گزارش مشکل.
+- بررسی نسخه جدید از GitHub Releases هنگام بازشدن برنامه دسکتاپ یا با دکمه Check for updates. نصب خودکار انجام نمی‌شود و دانلود از صفحه رسمی Release است.
+
 ## شروع سریع
 
-۱. برنامه را اجرا کنید. در نصب تازه نسخه v0.1.4 روی ویندوز، رمز مخصوص برنامه اجباری نیست. داده‌های Workspace با Windows CurrentUser DPAPI محافظت می‌شوند.
+۱. برنامه را اجرا کنید. در نصب تازه نسخه v0.2.0 روی ویندوز، رمز مخصوص برنامه اجباری نیست. داده‌های Workspace با Windows CurrentUser DPAPI محافظت می‌شوند.
 
 ۲. در Collection نمونه `Getting started` یک درخواست انتخاب کنید و **Send** را بزنید. برای درخواست جدید، متد، URL، Params، Headers، Body یا Authorization را وارد کنید.
 
@@ -39,6 +49,8 @@
 ۴. هشدارها را بررسی کنید. Scriptها و بعضی روش‌های Auth و فیلدهای آپلود فایل در این نسخه وارد یا اجرا نمی‌شوند.
 
 **توجه:** Restore فایل Backup اختصاصی API Studio با Import از Postman فرق دارد و ممکن است بعد از تایید صریح، Workspace فعلی را جایگزین کند. قبل از Restore بکاپ خصوصی بگیرید.
+
+برای بازکردن لینک‌های سورس و راهنما، از علامت Help در بالای صفحه یا **Help / About** در منوی Workspace actions استفاده کنید.
 
 ## امنیت و ارتقا
 
@@ -63,12 +75,12 @@ npm run test:e2e
 npm run desktop:build
 ```
 
-نسخه v0.1.4 در [CI نهایی](https://github.com/mehrdadbahrainy/api-studio/actions/runs/44063915754) با تست‌های واحد، E2E مرورگر، ساخت نصاب واقعی ویندوز، تست نصب و اجرای WebView2 و حذف نصب بررسی شده است. [فرایند انتشار](https://github.com/mehrdadbahrainy/api-studio/actions/runs/44065235512) نیز موفق بوده است. این تست‌ها تضمین نبود خطا روی تمام دستگاه‌ها نیستند.
+نسخه قبلی v0.1.4 در [CI نهایی](https://github.com/mehrdadbahrainy/api-studio/actions/runs/44063915754) با تست‌های واحد، E2E مرورگر، ساخت نصاب واقعی ویندوز، تست نصب و اجرای WebView2 و حذف نصب بررسی شده است. [فرایند انتشار](https://github.com/mehrdadbahrainy/api-studio/actions/runs/44065235512) نیز موفق بوده است. این تست‌ها تضمین نبود خطا روی تمام دستگاه‌ها نیستند.
 
 سناریوهای تکمیلی آزمون Import از File Picker ویندوز و ارتقا با Vault ساخته‌شده در نسخه واقعی v0.1.2 در [Issue شماره ۹](https://github.com/mehrdadbahrainy/api-studio/issues/9) ثبت شده‌اند.
 
 ## وضعیت قابلیت‌ها و نقشه راه
 
-قابلیت‌هایی مانند **API Scenario Runner بدون اسکریپت**، انتقال Token و شناسه سفارش بین درخواست‌ها، فایل‌های قابل Version Control، اجرای CLI، گزارش JUnit و اجرای تست‌ها در GitHub Actions هنوز **جزو نسخه v0.1.4 نیستند** و برای نسخه‌های بعدی برنامه‌ریزی شده‌اند.
+قابلیت‌هایی مانند **API Scenario Runner بدون اسکریپت**، انتقال Token و شناسه سفارش بین درخواست‌ها، فایل‌های قابل Version Control، اجرای CLI، گزارش JUnit و اجرای تست‌ها در GitHub Actions هنوز **جزو نسخه v0.2.0 نیستند** و برای نسخه‌های بعدی برنامه‌ریزی شده‌اند.
 
 برای پیگیری تغییرات [CHANGELOG](CHANGELOG.md)، [README انگلیسی](README.md) و [نقشه راه](https://docs.google.com/document/d/1c_9gC-7vhMQzgogBgm7DevEEXRd6-hEq9JKLcoTYneg/edit) را ببینید. برای گزارش باگ یا پیشنهاد، از [GitHub Issues](https://github.com/mehrdadbahrainy/api-studio/issues) استفاده کنید.

@@ -128,7 +128,7 @@
       @if (warning) {<div class="alert warning"><span>!</span>{{warning}}<button type="button" (click)="warning=''" aria-label="Dismiss warning"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button></div>}
       @if (!isDesktop) {<div class="alert info"><span>i</span><span>Browser preview: cross-origin requests are subject to CORS. The desktop app sends requests through Tauri's native HTTP client.</span></div>}
       @if (updateStatus?.updateAvailable) {<div class="alert update-available" role="status"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#arrow-up-circle"></use></svg><span>New version {{updateStatus?.latestVersion}} is available.</span><button type="button" class="button outline" (click)="openHelp()">View update</button></div>}
-      @if (updateInfo && !updateStatus?.updateAvailable) {<div class="alert info"><span>i</span><span>{{updateInfo}} <a [href]="releasesPage" target="_blank" rel="noopener noreferrer">GitHub Releases</a></span><button type="button" (click)="updateInfo=''" aria-label="Dismiss update status"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button></div>}
+      @if (updateInfo && !updateStatus?.updateAvailable) {<div class="alert info"><span>i</span><span>{{updateInfo}} <a [href]="releasesPage" (click)="openProjectLink($event,releasesPage)" target="_blank" rel="noopener noreferrer">GitHub Releases</a></span><button type="button" (click)="updateInfo=''" aria-label="Dismiss update status"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button></div>}
       @if (error) {<div class="alert error" role="alert"><span>!</span><span>{{error}}</span><button type="button" (click)="error=''" aria-label="Dismiss error"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button></div>}
 
       <section class="request-section card" aria-label="HTTP request">
@@ -237,9 +237,9 @@
         </div>
         @if(updateStatus?.updateAvailable){
           <div class="help-update-message" role="status"><strong>Update available: {{updateStatus?.latestVersion}}</strong><p>Download the verified installer from GitHub. Updates are never installed automatically. Export a private workspace backup before upgrading.</p>
-          <a class="button primary" [href]="updateStatus?.releaseUrl" target="_blank" rel="noopener noreferrer">Open release &amp; download</a></div>
+          <a class="button primary" [href]="updateStatus?.releaseUrl" (click)="openProjectLink($event,updateStatus?.releaseUrl??releasesPage)" target="_blank" rel="noopener noreferrer">Open release &amp; download</a></div>
         }@else if(updateStatus?.latestVersion){
-          <p class="help-up-to-date" role="status">You have the latest stable version available to this installation.</p>
+          <p class="help-up-to-date" role="status">No newer stable release is available.</p>
         }
         @if(updateCheckError){<p class="help-update-error" role="alert">{{updateCheckError}}</p>}
         <div class="help-guide">
@@ -248,12 +248,12 @@
           <p><strong>Shortcuts:</strong> Ctrl+Enter sends, Ctrl+S saves, Ctrl+N opens a new request, Ctrl+W closes the current tab.</p>
         </div>
         <div class="help-links" aria-label="Project resources">
-          <a [href]="sourcePage" target="_blank" rel="noopener noreferrer">Source code on GitHub</a>
-          <a [href]="docsPage" target="_blank" rel="noopener noreferrer">README documentation</a>
-          <a [href]="persianGuidePage" target="_blank" rel="noopener noreferrer">Persian quickstart guide</a>
-          <a [href]="changelogPage" target="_blank" rel="noopener noreferrer">Changelog</a>
-          <a [href]="issuesPage" target="_blank" rel="noopener noreferrer">Report an issue</a>
-          <a [href]="licensePage" target="_blank" rel="noopener noreferrer">MIT license</a>
+          <a [href]="sourcePage" (click)="openProjectLink($event,sourcePage)" target="_blank" rel="noopener noreferrer">Source code on GitHub</a>
+          <a [href]="docsPage" (click)="openProjectLink($event,docsPage)" target="_blank" rel="noopener noreferrer">README documentation</a>
+          <a [href]="persianGuidePage" (click)="openProjectLink($event,persianGuidePage)" target="_blank" rel="noopener noreferrer">Persian quickstart guide</a>
+          <a [href]="changelogPage" (click)="openProjectLink($event,changelogPage)" target="_blank" rel="noopener noreferrer">Changelog</a>
+          <a [href]="issuesPage" (click)="openProjectLink($event,issuesPage)" target="_blank" rel="noopener noreferrer">Report an issue</a>
+          <a [href]="licensePage" (click)="openProjectLink($event,licensePage)" target="_blank" rel="noopener noreferrer">MIT license</a>
           <a [href]="releasesPage" target="_blank" rel="noopener noreferrer">All releases</a>
         </div>
         <p class="help-note">Update checks connect to GitHub Releases. The installer is not downloaded automatically. Workspace exports may contain tokens and are not encrypted.</p>
