@@ -7,6 +7,7 @@ import { SystemWorkspace } from './core/system-workspace';
 import { MAX_EDITOR_TABS, readTabPreferences, requestIsDirty, resolveSavedTabIds, writeTabPreferences } from './core/editor-tab-state';
 import { COLLAPSED_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth, readSidebarPreferences, writeSidebarPreferences } from './core/sidebar-state';
 import { checkForUpdates, RELEASES_PAGE } from './core/update-check';
+import { CHANGELOG_URL, DOCUMENTATION_URL, ISSUES_URL, LICENSE_URL, PERSIAN_GUIDE_URL, SOURCE_REPOSITORY, UpdateStatus } from './core/release-catalog';
 import { executeRequest } from './core/http-transport';
 import { loadWorkspace, saveWorkspace, downloadJson } from './core/storage';
 import { addHistory } from './core/workspace-utils';
@@ -35,6 +36,12 @@ export class AppComponent implements OnDestroy {
   readonly isDesktop=isTauri();
   readonly bytes=readableBytes;
   readonly releasesPage=RELEASES_PAGE;
+  readonly sourcePage=SOURCE_REPOSITORY;
+  readonly docsPage=DOCUMENTATION_URL;
+  readonly persianGuidePage=PERSIAN_GUIDE_URL;
+  readonly changelogPage=CHANGELOG_URL;
+  readonly issuesPage=ISSUES_URL;
+  readonly licensePage=LICENSE_URL;
   readonly version='0.1.4';
   readonly collapsedSidebarWidth=COLLAPSED_SIDEBAR_WIDTH;
   vaultLocked=false;
@@ -49,7 +56,10 @@ export class AppComponent implements OnDestroy {
   vaultPassphrase='';
   vaultError='';
   checkingUpdates=false;
+  showHelp=false;
+  updateStatus:UpdateStatus|null=null;
   updateInfo='';
+  updateCheckError='';
   private secureWorkspace:SecureWorkspace|SystemWorkspace|null=null;
   workspace:Workspace;
   draft:RequestDraft;
@@ -93,7 +103,10 @@ export class AppComponent implements OnDestroy {
     this.activeRequestId=first?.id??null;
     this.activeCollectionId=first?.collectionId??null;
     if(!this.isDesktop)this.restoreRequestTabs();
-    if(this.isDesktop) void this.initializeDesktop();
+    if(this.isDesktop){
+      void this.initializeDesktop();
+      void this.checkUpdates(true);
+    }
   }
   ngOnDestroy():void {this.controller?.abort();if(this.notificationTimer)clearTimeout(this.notificationTimer);this.isResizingSidebar=false;}
   private openWorkspace(workspace:Workspace, vault:SecureWorkspace|SystemWorkspace, mode:'system'|'password'):void {
@@ -175,12 +188,21 @@ export class AppComponent implements OnDestroy {
     }catch(error:unknown){this.securityError=describeVaultError(error);}
     finally{this.securityWorking=false;}
   }
-  async checkUpdates():Promise<void> {
-    if (this.checkingUpdates) return;
-    this.closePopup();this.checkingUpdates=true;this.updateInfo='';
-    try {this.updateInfo=await checkForUpdates();}
-    catch {this.updateInfo='Update check failed. Check your connection and visit GitHub Releases manually.';}
-    finally {this.checkingUpdates=false;}
+  openHelp():void { this.showMenu=false;this.showHelp=true; }
+  async checkUpdates(silent=false):Promise<void> {
+    if(this.checkingUpdates)return;
+    this.closePopup();this.checkingUpdates=true;this.updateCheckError='';
+    try {
+      this.updateStatus=await checkForUpdates(this.version);
+      this.updateInfo=this.updateStatus.updateAvailable
+        ? 'Update available: '+this.updateStatus.latestVersion
+        : this.updateStatus.latestVersion
+          ? 'Up to date. Latest stable: '+this.updateStatus.latestVersion
+          : 'No stable release has been published yet.';
+    }catch{
+      this.updateCheckError='Could not reach GitHub Releases. Check your network and retry.';
+      if(!silent)this.updateInfo=this.updateCheckError;
+    }finally{this.checkingUpdates=false;}
   }
   get activeEnvironment():Environment|undefined {return this.workspace.environments.find(x=>x.id===this.workspace.selectedEnvironmentId);}
   get activeCollection():Collection|undefined {return this.workspace.collections.find(x=>x.id===this.activeCollectionId);}

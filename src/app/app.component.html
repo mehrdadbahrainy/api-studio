@@ -65,6 +65,7 @@
     <div class="sidebar-bottom">
       <div class="sidebar-signal"><span class="signal-dot"></span><span>{{isDesktop?'Desktop mode':'Browser preview'}}</span><span class="signal-right">{{isDesktop?'Native HTTP':'CORS applies'}}</span></div>
       <p>{{isDesktop?'Requests run locally on your machine. No account needed.':'Install the desktop app for unrestricted API testing.'}}</p>
+      <button type="button" class="sidebar-help-link" (click)="openHelp()">Help, docs &amp; source</button>
     </div>
     <div class="sidebar-resize-handle" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin="228" aria-valuemax="480" [attr.aria-valuenow]="sidebarWidth" [attr.tabindex]="sidebarCollapsed?-1:0" title="Drag to resize, or use arrow keys" (pointerdown)="beginSidebarResize($event)" (keydown)="resizeSidebarFromKeyboard($event)"><span class="resize-grip"></span></div>
   </aside>
@@ -74,10 +75,11 @@
       <div class="crumbs"><span>Workspace</span><span class="crumb-sep">/</span><strong>{{requestTitle}}</strong></div>
       <div class="top-actions">
         <button type="button" class="environment-button" (click)="toggleEnvironmentDialog()" aria-label="Edit environments"><svg class="ui-icon env-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#settings"></use></svg><span>{{activeEnvironment?.name??'No environment'}}</span><svg class="ui-icon downchevron" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#chevron-down"></use></svg></button>
+        <button type="button" class="header-icon-button help-top-button" (click)="openHelp()" title="Help and About" aria-label="Help and About"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#circle-help"></use></svg></button>
         <button type="button" class="header-icon-button" title="New request (Ctrl+N)" aria-label="New request" (click)="newRequest()"><svg class="ui-icon" viewBox="0 0 24 24"><use href="assets/lucide.svg#plus"></use></svg></button>
         <div class="menu-container">
           <button type="button" class="header-icon-button ellipsis" (click)="showMenu=!showMenu" title="Workspace actions" aria-label="Workspace actions"><svg class="ui-icon" viewBox="0 0 24 24"><use href="assets/lucide.svg#ellipsis"></use></svg></button>
-          @if (showMenu) {<div class="menu-popover"><button (click)="exportWorkspace()">Export workspace as JSON</button><label class="import-choice">Import JSON (API Studio / Postman)<input type="file" accept=".json,application/json" (change)="importWorkspace($event)" hidden></label><button (click)="duplicateRequest();closePopup()">Duplicate request</button>@if(isDesktop){<button (click)="showSecurityDialog=true;securityError='';closePopup()">Security settings</button>}<button (click)="checkUpdates()">Check for updates</button>@if(isSaved){<button class="danger" (click)="deleteRequest();closePopup()">Delete saved request</button>}</div>}
+          @if (showMenu) {<div class="menu-popover"><button (click)="exportWorkspace()">Export workspace as JSON</button><label class="import-choice">Import JSON (API Studio / Postman)<input type="file" accept=".json,application/json" (change)="importWorkspace($event)" hidden></label><button (click)="duplicateRequest();closePopup()">Duplicate request</button>@if(isDesktop){<button (click)="showSecurityDialog=true;securityError='';closePopup()">Security settings</button>}<button (click)="openHelp()">Help &amp; About</button><button (click)="openHelp();checkUpdates()">Check for updates</button>@if(isSaved){<button class="danger" (click)="deleteRequest();closePopup()">Delete saved request</button>}</div>}
         </div>
       </div>
     </header>
@@ -111,7 +113,8 @@
 
       @if (warning) {<div class="alert warning"><span>!</span>{{warning}}<button type="button" (click)="warning=''" aria-label="Dismiss warning"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button></div>}
       @if (!isDesktop) {<div class="alert info"><span>i</span><span>Browser preview: cross-origin requests are subject to CORS. The desktop app sends requests through Tauri's native HTTP client.</span></div>}
-      @if (updateInfo) {<div class="alert info"><span>i</span><span>{{updateInfo}} <a [href]="releasesPage" target="_blank" rel="noopener noreferrer">GitHub Releases</a></span><button type="button" (click)="updateInfo=''" aria-label="Dismiss update status"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button></div>}
+      @if (updateStatus?.updateAvailable) {<div class="alert update-available" role="status"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#arrow-up-circle"></use></svg><span>New version {{updateStatus?.latestVersion}} is available.</span><button type="button" class="button outline" (click)="openHelp()">View update</button></div>}
+      @if (updateInfo && !updateStatus?.updateAvailable) {<div class="alert info"><span>i</span><span>{{updateInfo}} <a [href]="releasesPage" target="_blank" rel="noopener noreferrer">GitHub Releases</a></span><button type="button" (click)="updateInfo=''" aria-label="Dismiss update status"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button></div>}
       @if (error) {<div class="alert error" role="alert"><span>!</span><span>{{error}}</span><button type="button" (click)="error=''" aria-label="Dismiss error"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button></div>}
 
       <section class="request-section card" aria-label="HTTP request">
@@ -185,6 +188,45 @@
   </main>
 </div>
 
+@if(showHelp){
+  <div class="modal-backdrop" (click)="showHelp=false">
+    <section class="modal help-about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-heading" (click)="$event.stopPropagation()">
+      <header class="modal-heading">
+        <div><p class="kicker">HELP &amp; ABOUT</p><h2 id="about-heading">API Studio</h2><p>Local-first REST API client for developers, built with Angular and Tauri.</p></div>
+        <button class="modal-close" type="button" (click)="showHelp=false" aria-label="Close Help and About"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#x"></use></svg></button>
+      </header>
+      <div class="modal-body help-about-content">
+        <div class="help-version-row">
+          <div><span class="help-field-label">Installed version</span><strong>v{{updateStatus?.installedVersion??version}}</strong></div>
+          <div><span class="help-field-label">Latest stable version</span><strong>{{updateStatus?.latestVersion??'Not checked'}}</strong></div>
+          <button class="button outline" type="button" [disabled]="checkingUpdates" (click)="checkUpdates()">{{checkingUpdates?'Checking GitHub…':'Check for updates'}}</button>
+        </div>
+        @if(updateStatus?.updateAvailable){
+          <div class="help-update-message" role="status"><strong>Update available: {{updateStatus?.latestVersion}}</strong><p>Download the verified installer from GitHub. Updates are never installed automatically. Export a private workspace backup before upgrading.</p>
+          <a class="button primary" [href]="updateStatus?.releaseUrl" target="_blank" rel="noopener noreferrer">Open release &amp; download</a></div>
+        }@else if(updateStatus?.latestVersion){
+          <p class="help-up-to-date" role="status">You have the latest stable version available to this installation.</p>
+        }
+        @if(updateCheckError){<p class="help-update-error" role="alert">{{updateCheckError}}</p>}
+        <div class="help-guide">
+          <h3>How to use API Studio</h3>
+          <p>Create a request, select an HTTP method and URL, then Send. Save it in a Collection, organize requests in folders or tabs, and inspect the returned status, headers and body. Workspace actions can import Postman Collection or Environment JSON and export a private backup.</p>
+          <p><strong>Shortcuts:</strong> Ctrl+Enter sends, Ctrl+S saves, Ctrl+N opens a new request, Ctrl+W closes the current tab.</p>
+        </div>
+        <div class="help-links" aria-label="Project resources">
+          <a [href]="sourcePage" target="_blank" rel="noopener noreferrer">Source code on GitHub</a>
+          <a [href]="docsPage" target="_blank" rel="noopener noreferrer">README documentation</a>
+          <a [href]="persianGuidePage" target="_blank" rel="noopener noreferrer">Persian quickstart guide</a>
+          <a [href]="changelogPage" target="_blank" rel="noopener noreferrer">Changelog</a>
+          <a [href]="issuesPage" target="_blank" rel="noopener noreferrer">Report an issue</a>
+          <a [href]="licensePage" target="_blank" rel="noopener noreferrer">MIT license</a>
+          <a [href]="releasesPage" target="_blank" rel="noopener noreferrer">All releases</a>
+        </div>
+        <p class="help-note">Update checks connect to GitHub Releases. The installer is not downloaded automatically. Workspace exports may contain tokens and are not encrypted.</p>
+      </div>
+    </section>
+  </div>
+}
 @if(pendingCloseTabKey){
   <div class="modal-backdrop" (click)="resolveCloseTab('cancel')">
     <section class="modal close-tab-dialog" role="dialog" aria-modal="true" aria-labelledby="close-tab-heading" (click)="$event.stopPropagation()">
