@@ -2,6 +2,12 @@
 
 Installer files and SHA-256 checksums remain on [GitHub Releases](https://github.com/mehrdadbahrainy/api-studio/releases). Unreleased fixes below do not modify previously published installers.
 
+## Unreleased — persisted-field integrity
+
+- Reject oversized saved/imported fields and row lists before persistence instead of silently truncating them during reload. Preserve the previous saved workspace and unsaved edits when validation fails.
+- Validate browser, DPAPI and passphrase-encrypted writes, malformed request lists and environment identities; add boundary, browser and installed-MSI regressions for [P1 issue #22](https://github.com/mehrdadbahrainy/api-studio/issues/22).
+- See [the finding and compatibility limits](docs/qa/v0.2.1-field-integrity.md). Published v0.2.1 remains unchanged; a new release needs separate owner approval.
+
 ## [v0.2.1](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.2.1) — 2026-11-20
 
 Patch release of the local Windows QA corrections. The previously published v0.2.0 installer remains unchanged.

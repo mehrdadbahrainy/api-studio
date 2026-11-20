@@ -13,6 +13,8 @@ export function loadWorkspace(): LoadStatus {
   catch { return {workspace:initialWorkspace(),warning:'Saved data could not be read. A fresh workspace was loaded; the previous storage entry was not deleted.'}; }
 }
 export function saveWorkspace(workspace:Workspace): string {
+  try{parseWorkspace(workspace);}
+  catch(error){return 'Workspace validation failed. Nothing was saved. '+(error instanceof Error?error.message:'Invalid workspace.');}
   try {localStorage.setItem(KEY,JSON.stringify(workspace));return '';}
   catch {return 'Local storage is full or unavailable. Export your workspace to avoid losing changes.';}
 }

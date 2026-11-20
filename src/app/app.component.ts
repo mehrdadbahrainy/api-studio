@@ -13,7 +13,7 @@ import { collectionNavigation, ensureFolderPath, folderBreadcrumb, NavigationIte
 import { CHANGELOG_URL, DOCUMENTATION_URL, ISSUES_URL, LICENSE_URL, PERSIAN_GUIDE_URL, SOURCE_REPOSITORY, UpdateStatus } from './core/release-catalog';
 import { executeRequest } from './core/http-transport';
 import { loadWorkspace, saveWorkspace, downloadJson } from './core/storage';
-import { addHistory, MAX_COLLECTIONS, MAX_REQUESTS, MAX_ENVIRONMENTS } from './core/workspace-utils';
+import { addHistory, parseWorkspace, MAX_COLLECTIONS, MAX_REQUESTS, MAX_ENVIRONMENTS } from './core/workspace-utils';
 import { parseImportedJson } from './core/import-json';
 import { activeVariables, readableBytes, RequestValidationError } from './core/request-utils';
 import { RequestTransportError } from './core/network-errors';
@@ -480,6 +480,11 @@ export class AppComponent implements OnDestroy {
   closePopup():void{this.showMenu=false;}
   inform(text:string):void {this.notice=text;if(this.notificationTimer)clearTimeout(this.notificationTimer);this.notificationTimer=setTimeout(()=>this.notice='',2800);}
   async persist():Promise<boolean> {
+    try{parseWorkspace(this.workspace);}
+    catch(error){
+      this.warning='Workspace validation failed. Nothing was saved. '+(error instanceof Error?error.message:'Invalid workspace.');
+      return false;
+    }
     if (this.isDesktop) {
       if (this.vaultLocked || !this.secureWorkspace) return false;
       // Snapshot active editor IDs at every committed write, including Save
