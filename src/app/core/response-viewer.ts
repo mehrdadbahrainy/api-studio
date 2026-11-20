@@ -37,7 +37,9 @@ export function responsePreview(response:HttpResult,mode:ResponseMode):ResponseP
   const truncated=response.body.length>MAX_RESPONSE_PREVIEW_CHARS;
   const raw=truncated?response.body.slice(0,MAX_RESPONSE_PREVIEW_CHARS):response.body;
   let text=raw;
-  if(kind==='binary')text='Binary content cannot be previewed as text. Save the response if available.';
+  // The transport replaces unavailable bodies with a safe diagnostic. Keep its
+  // size-limit explanation instead of suggesting a disabled binary download.
+  if(kind==='binary')text=raw || 'Binary response received. Body preview is not available in this version.';
   else if(mode==='formatted'&&!truncated){
     if(kind==='json'){try{text=JSON.stringify(JSON.parse(raw),null,2)}catch{text=raw;}}
     if(kind==='xml'||kind==='html')text=formatMarkup(raw);

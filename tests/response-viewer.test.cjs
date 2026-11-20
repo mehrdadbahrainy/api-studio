@@ -2,6 +2,12 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {classifyResponse,responsePreview,responseFileName,MAX_RESPONSE_PREVIEW_CHARS}=require('../.test-dist/response-viewer.js');
 const result=(body,contentType='application/json')=>({status:200,statusText:'OK',durationMs:15,sizeBytes:body.length,headers:[],body,contentType,binary:false});
+
+test('unavailable response preserves the transport size-limit diagnostic',()=>{
+  const response={...result('Response exceeds the 5 MB preview limit. Body not displayed.'),binary:true};
+  assert.match(responsePreview(response,'formatted').text,/5 MB preview limit/);
+  assert.doesNotMatch(responsePreview(response,'raw').text,/Save the response/);
+});
 test('classifies JSON, XML, HTML, text and binary payloads',()=>{
   assert.equal(classifyResponse('application/problem+json','{"message":"x"}'),'json');
   assert.equal(classifyResponse('application/soap+xml','<a/>'),'xml');

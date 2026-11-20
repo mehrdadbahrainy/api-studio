@@ -12,6 +12,9 @@ import { resolve, dirname, join } from 'node:path';
 
 const executable = process.env.API_STUDIO_EXE;
 if (!executable) throw new Error('API_STUDIO_EXE must point to the MSI-installed desktop executable');
+if (process.env.GITHUB_ACTIONS !== 'true' || process.env.API_STUDIO_DISPOSABLE_RUNNER !== '1') {
+  throw new Error('Native acceptance changes workspace data and must only run on an explicitly disposable GitHub Actions runner. Never run against a personal Windows profile.');
+}
 const userDataDir = mkdtempSync(join(tmpdir(), 'api-studio-webview-'));
 const passphrase = 'ci-fake-test-passphrase-2026';
 const legacyToken = 'FAKE_CI_MIGRATION_TOKEN_DO_NOT_USE';
@@ -19,6 +22,61 @@ const legacyBody = 'FAKE_CI_PRIVATE_BODY';
 const key = 'api-studio.workspace.v1';
 const delay = ms => new Promise(r => setTimeout(r, ms));
 let spawned = null, browser = null;
+const mock = spawn(process.execPath, [resolve('tests/e2e/mock-api.mjs')], {stdio:'ignore',windowsHide:true});
+
+async function realHttpAcceptance(page) {
+  const fixture='http://127.0.0.1:4311';
+  await expect.poll(async()=>{try{return (await fetch(fixture+'/health')).status;}catch{return 0;}}).toBe(200);
+  for(const method of ['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS']){
+    await page.getByRole('combobox',{name:'HTTP method'}).selectOption(method);
+    await page.getByRole('textbox',{name:'Request URL'}).fill(fixture+'/echo?native='+method);
+    await page.getByRole('button',{name:'Send',exact:true}).click();
+    await expect(page.getByRole('button',{name:'Send',exact:true})).toBeVisible();
+    await expect(page.locator('.response-metrics')).toContainText(method==='OPTIONS'?'204':'200');
+    if(!['HEAD','OPTIONS'].includes(method))await expect(page.locator('.response-code')).toContainText('"method": "'+method+'"');
+  }
+  await page.getByRole('combobox',{name:'HTTP method'}).selectOption('GET');
+  await page.getByRole('textbox',{name:'Request URL'}).fill(fixture+'/slow-body?ms=700');
+  await page.getByRole('button',{name:'Send',exact:true}).click();
+  await expect(page.locator('.response-code')).toHaveText('first-last');
+  const metrics=await page.locator('.response-metrics').innerText();
+  if(Number(metrics.match(/Time\s*(\d+)\s*ms/)[1])<650)throw new Error('Native elapsed time excluded response body download');
+  await page.getByRole('textbox',{name:'Request URL'}).fill(fixture+'/payload?kind=html');
+  await page.getByRole('button',{name:'Send',exact:true}).click();
+  await expect(page.locator('.response-code')).toContainText('<script>window.qaInjected=true</script>');
+  if(await page.evaluate(()=>window.qaInjected===true))throw new Error('Native markup response executed a script');
+  await page.getByRole('textbox',{name:'Request URL'}).fill(fixture+'/payload?kind=oversized');
+  await page.getByRole('button',{name:'Send',exact:true}).click();
+  await expect(page.locator('.response-code')).toContainText('5 MB preview limit');
+  await page.getByRole('textbox',{name:'Request URL'}).fill(fixture+'/delay?ms=5000');
+  await page.getByRole('button',{name:'Send',exact:true}).click();
+  await page.getByRole('button',{name:'Cancel',exact:true}).click();
+  await expect(page.getByRole('alert')).toContainText('Request cancelled');
+  await page.getByRole('button',{name:/Save request/}).click();
+  await expect(page.locator('.toast')).toContainText('Request saved');
+  console.log('PASS: real native HTTP seven methods, full response timing, inert HTML, oversized body and cancellation');
+}
+
+async function nativeImportAcceptance(page) {
+  for(const version of ['2.0','2.1']){
+    const data={info:{name:'Native QA '+version,schema:`https://schema.getpostman.com/json/collection/v${version}.0/collection.json`},item:[{name:'Nested',item:[{name:'Native imported '+version,request:{method:'GET',url:'http://127.0.0.1:4311/echo'}}]}]};
+    await page.getByRole('button',{name:'Workspace actions'}).click();
+    page.once('dialog',d=>d.accept());
+    await page.locator('.import-choice input[type=file]').setInputFiles({name:'qa-postman.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(data))});
+    await expect(page.locator('.toast')).toContainText('Postman collection imported');
+    await expect(page.locator('.request-nav').filter({hasText:'Native imported '+version})).toBeVisible();
+    await expect(page.getByTitle('Getting started').locator('span')).toBeVisible();
+  }
+  await page.getByRole('button',{name:'Workspace actions'}).click();
+  page.once('dialog',d=>d.accept());
+  await page.locator('.import-choice input[type=file]').setInputFiles({name:'qa-environment.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({name:'Native QA environment',_postman_variable_scope:'environment',values:[{key:'baseUrl',value:'http://127.0.0.1:4311',enabled:true}]}))});
+  await expect(page.locator('.toast')).toContainText('Postman environment added');
+  await page.getByRole('button',{name:'Workspace actions'}).click();
+  await page.locator('.import-choice input[type=file]').setInputFiles({name:'invalid.json',mimeType:'application/json',buffer:Buffer.from('{invalid')});
+  await expect(page.getByRole('alert')).toContainText('Invalid JSON');
+  await expect(page.locator('.request-nav').filter({hasText:'Native imported 2.1'})).toBeVisible();
+  console.log('PASS: installed WebView2 file-input imports Postman v2.0/v2.1/environment and rejects malformed JSON (OS file-picker interaction remains separate coverage)');
+}
 
 async function stop() {
   try { await browser?.close(); } catch {}
@@ -122,6 +180,8 @@ async function main() {
   await page.getByRole('button',{name:'Expand sidebar'}).click();
   await expect(page.locator('.sidebar')).not.toHaveClass(/is-collapsed/);
   console.log('PASS: installed WebView2 collection disclosure and sidebar layout controls');
+  await realHttpAcceptance(page);
+  await nativeImportAcceptance(page);
 
   await page.evaluate(async ([storageKey, data]) => {
     localStorage.setItem(storageKey, JSON.stringify(data));
@@ -262,5 +322,6 @@ try {
   await main();
 } finally {
   await stop();
+  mock.kill();
   rmSync(userDataDir, {recursive:true,force:true});
 }

@@ -8,3 +8,9 @@ src-tauri/gen/
 .DS_Store
 .idea/
 .vscode/
+.angular/
+playwright-report/
+test-results/
+/baseline-*.json
+/baseline-*.txt
+/qa-e2e-*.json

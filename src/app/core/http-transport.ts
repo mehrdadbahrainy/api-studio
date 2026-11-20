@@ -27,7 +27,6 @@ export async function executeRequest(draft: RequestDraft, environment?: Environm
 }
 async function sendWithController(url: string, init: RequestInit, signal: AbortSignal, start: number): Promise<HttpResult> {
   const response = await (isTauri() ? nativeFetch : window.fetch)(url, {...init, signal});
-  const elapsed = Math.round(performance.now() - start);
   const contentType = response.headers.get('content-type') ?? '';
   const reportedLength = Number(response.headers.get('content-length') ?? '0');
   let body: string;
@@ -50,5 +49,6 @@ async function sendWithController(url: string, init: RequestInit, signal: AbortS
         : new TextDecoder('utf-8').decode(buffer);
     }
   }
+  const elapsed = Math.round(performance.now() - start);
   return {status:response.status,statusText:response.statusText,durationMs:elapsed,sizeBytes,headers:[...response.headers.entries()].map(([key,value])=>row(key,value)),body,contentType,binary};
 }

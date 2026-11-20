@@ -14,7 +14,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], ...(process.env.API_STUDIO_BROWSER_CHANNEL ? {channel:process.env.API_STUDIO_BROWSER_CHANNEL} : {}) } }],
   webServer: [
     {
       command: 'node tests/e2e/mock-api.mjs',

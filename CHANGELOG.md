@@ -1,6 +1,13 @@
 # Changelog
 
-This file records public releases, not unfinished work. Installer files and SHA-256 checksums remain on [GitHub Releases](https://github.com/mehrdadbahrainy/api-studio/releases).
+Installer files and SHA-256 checksums remain on [GitHub Releases](https://github.com/mehrdadbahrainy/api-studio/releases). Unreleased fixes below do not modify previously published installers.
+
+## Unreleased — Windows QA fixes
+
+- Reject over-capacity or ambiguous-identity workspace backups instead of silently losing Collections/environments; enforce matching interactive creation limits and preserve saved-request capacity independently of History.
+- Include response-body download in request duration, retain the 5 MB response diagnostic, and record the sent draft in History even when the editor changes during transport.
+- Expand real localhost HTTP coverage, import/capacity/keyboard regressions and disposable installed-MSI/WebView2 HTTP/import acceptance. Native destructive tests refuse personal-profile execution.
+- Document [actual Windows QA coverage and outstanding checks](docs/qa/windows-v0.2.0.md). A patched release requires separate owner approval; v0.2.0 assets remain unchanged.
 
 ## [v0.2.0](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.2.0) — 2026-11-19
 

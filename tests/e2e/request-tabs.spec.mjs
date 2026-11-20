@@ -7,6 +7,7 @@ test('three saved request tabs reopen after restart without losing their URLs',a
   await page.goto('/');
   for(let i=1;i<=3;i++){
     await newTab(page).click();
+    await expect(page.getByRole('textbox',{name:'Request name'})).toHaveValue('Untitled request');
     await page.getByRole('textbox',{name:'Request name'}).fill('Scenario request '+i);
     await page.getByRole('textbox',{name:'Request URL'}).fill('https://example.test/scenario/'+i);
     await page.getByRole('button',{name:/Save request/}).click();
@@ -27,6 +28,7 @@ test('three saved request tabs reopen after restart without losing their URLs',a
 test('unsaved draft stays in its own tab and safe-close supports cancel and discard',async({page})=>{
   await page.goto('/');
   await newTab(page).click();
+  await expect(page.getByRole('textbox',{name:'Request name'})).toHaveValue('Untitled request');
   await page.getByRole('textbox',{name:'Request name'}).fill('Unfinished post');
   await page.getByRole('textbox',{name:'Request URL'}).fill('https://example.test/unsaved');
   await expect(page.getByText('Unsaved changes',{exact:true}).last()).toBeVisible();
