@@ -31,7 +31,7 @@ This new patch packages the **source fixes found by local testing of v0.2.1**. T
 
 ## v0.2.1 — Windows QA stability patch
 
-**Install v0.2.1 instead of the original v0.2.0 if you are upgrading or installing now.** Four verified Windows/local HTTP QA defects were fixed in source after v0.2.0 was already published, so its previously published installer was not retroactively patched:
+**Historical v0.2.1 patch (now superseded by v0.2.2):** v0.2.1 replaced v0.2.0 before later local QA revealed the two additional issues described above. Four verified Windows/local HTTP QA defects were fixed in source after v0.2.0 was already published, so its previously published installer was not retroactively patched:
 
 - Workspace backup validation now rejects excessive Collections/environments and duplicate saved request IDs **without truncating data**.
 - Request duration includes streamed response-body download.
