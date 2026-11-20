@@ -1,0 +1,37 @@
+import {test,expect} from '@playwright/test';
+test('Help owns focus, traps Tab, blocks background HTTP and restores focus on Escape',async({page})=>{
+  await page.goto('/');
+  await page.getByRole('textbox',{name:'Request URL'}).fill('http://127.0.0.1:4311/echo?modal=background');
+  const sent=[];page.on('request',r=>{if(r.url().includes('modal=background'))sent.push(r.url());});
+  const opener=page.getByRole('button',{name:'Help and About'});
+  await opener.click();
+  const dialog=page.getByRole('dialog',{name:'API Studio'});
+  const close=dialog.getByRole('button',{name:'Close Help and About'});
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('link',{name:'All releases'})).toBeFocused();
+  await page.keyboard.press('Tab');await expect(close).toBeFocused();
+  for(const key of ['Control+Enter','Control+s','Control+n','Control+w','Control+Tab'])await page.keyboard.press(key);
+  expect(sent).toEqual([]);
+  await expect(page.getByRole('tablist',{name:'Open requests'}).getByRole('tab')).toHaveCount(1);
+  await expect(page.locator('.toast').filter({hasText:'Request saved'})).toHaveCount(0);
+  await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(opener).toBeFocused();
+});
+test('environment and close-confirmation dialogs prevent background shortcuts',async({page})=>{
+  await page.goto('/');
+  await page.getByRole('button',{name:'Edit environments'}).click();
+  const env=page.getByRole('dialog',{name:'Manage environments'});
+  await expect(env.getByRole('button',{name:'Close',exact:true})).toBeFocused();
+  await page.keyboard.press('Control+n');
+  await expect(page.getByRole('tablist',{name:'Open requests'}).getByRole('tab')).toHaveCount(1);
+  await page.keyboard.press('Escape');await expect(env).toHaveCount(0);
+  await page.getByRole('button',{name:'Open new request tab'}).click();
+  await expect(page.getByRole('textbox',{name:'Request name'})).toHaveValue('Untitled request');
+  await page.getByRole('button',{name:'Close tab Untitled request'}).click();
+  await expect(page.getByRole('heading',{name:'Close this request?'})).toBeVisible();
+  await page.keyboard.press('Control+w');
+  await expect(page.getByRole('tablist',{name:'Open requests'}).getByRole('tab')).toHaveCount(2);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('heading',{name:'Close this request?'})).toHaveCount(0);
+  await expect(page.getByRole('tablist',{name:'Open requests'}).getByRole('tab')).toHaveCount(2);
+});

@@ -6,6 +6,7 @@ Installer files and SHA-256 checksums remain on [GitHub Releases](https://github
 
 - Reject oversized saved/imported fields and row lists before persistence instead of silently truncating them during reload. Preserve the previous saved workspace and unsaved edits when validation fails.
 - Validate browser, DPAPI and passphrase-encrypted writes, malformed request lists and environment identities; add boundary, browser and installed-MSI regressions for [P1 issue #22](https://github.com/mehrdadbahrainy/api-studio/issues/22).
+- Keep unreadable browser data protected until explicitly confirmed backup restore; contain dialog focus and block background request shortcuts while modals are active ([issue #24](https://github.com/mehrdadbahrainy/api-studio/issues/24)).
 - See [the finding and compatibility limits](docs/qa/v0.2.1-field-integrity.md). Published v0.2.1 remains unchanged; a new release needs separate owner approval.
 
 ## [v0.2.1](https://github.com/mehrdadbahrainy/api-studio/releases/tag/v0.2.1) — 2026-11-20
