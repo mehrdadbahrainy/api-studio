@@ -46,7 +46,7 @@ export class AppComponent implements OnDestroy, AfterViewChecked {
   readonly changelogPage=CHANGELOG_URL;
   readonly issuesPage=ISSUES_URL;
   readonly licensePage=LICENSE_URL;
-  readonly version='0.2.1';
+  readonly version='0.2.2';
   readonly collapsedSidebarWidth=COLLAPSED_SIDEBAR_WIDTH;
   vaultLocked=false;
   vaultStarting=false;
