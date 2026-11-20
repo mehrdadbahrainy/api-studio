@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
 const key='api-studio.workspace.v1';
 async function importJson(page,data){
   await page.getByRole('button',{name:'Workspace actions'}).click();
@@ -72,4 +73,89 @@ test('keyboard new, save, send and close use the active request',async({page})=>
   await expect(page.locator('.response-code')).toContainText('"shortcut": "yes"');
   await page.keyboard.press('Control+w');
   await expect(page.getByRole('tablist',{name:'Open requests'}).getByRole('tab')).toHaveCount(1);
+});
+test('collection deletion requires confirmation and reload preserves unrelated data',async({page})=>{
+  await page.goto('/');
+  await page.getByRole('button',{name:'New collection'}).click();
+  await page.getByPlaceholder('Collection name').fill('Disposable QA');
+  await page.getByRole('button',{name:'Add',exact:true}).click();
+  page.once('dialog',d=>d.dismiss());
+  await page.getByRole('button',{name:'Delete Disposable QA',exact:true}).click();
+  await expect(page.getByTitle('Disposable QA').locator('span')).toBeVisible();
+  page.once('dialog',d=>d.accept());
+  await page.getByRole('button',{name:'Delete Disposable QA',exact:true}).click();
+  await expect(page.getByTitle('Disposable QA')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('.request-nav').filter({hasText:'Get a sample TODO'})).toBeVisible();
+});
+test('removing a parent folder retains nested folder and saved requests',async({page})=>{
+  await page.goto('/');
+  page.once('dialog',d=>d.accept('QA parent / QA child'));
+  await page.getByRole('button',{name:'New folder'}).click();
+  page.once('dialog',d=>d.accept('QA parent / QA child'));
+  await page.getByRole('button',{name:'Move collection Getting started to folder'}).click();
+  page.once('dialog',d=>d.accept());
+  await page.getByRole('button',{name:'Remove folder QA parent',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Collapse folder QA child'})).toBeVisible();
+  await page.reload();
+  await expect(page.locator('.request-nav').filter({hasText:'Get a sample TODO'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Collapse folder QA parent'})).toHaveCount(0);
+});
+test('clear history can be cancelled and never removes saved requests',async({page})=>{
+  await page.goto('/');
+  await page.getByRole('textbox',{name:'Request URL'}).fill('http://127.0.0.1:4311/echo');
+  await page.getByRole('button',{name:'Send',exact:true}).click();
+  await expect(page.locator('.response-metrics')).toContainText('200');
+  await page.getByRole('tab',{name:'History',exact:true}).click();
+  page.once('dialog',d=>d.dismiss());
+  await page.getByRole('button',{name:'Clear history',exact:true}).click();
+  await expect(page.locator('.history-item')).toHaveCount(1);
+  page.once('dialog',d=>d.accept());
+  await page.getByRole('button',{name:'Clear history',exact:true}).click();
+  await expect(page.locator('.history-item')).toHaveCount(0);
+  // Discard only this unsaved test URL before reloading the browser preview.
+  await page.getByRole('textbox',{name:'Request URL'}).fill('https://jsonplaceholder.typicode.com/todos/1');
+  await page.reload();
+  await expect(page.locator('.request-nav').filter({hasText:'Get a sample TODO'})).toBeVisible();
+  expect(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).history,key)).toEqual([]);
+});
+test('exported JSON restores exact saved requests and folders after explicit confirmation',async({page})=>{
+  await page.goto('/');
+  page.once('dialog',d=>d.accept('Export QA / Nested'));
+  await page.getByRole('button',{name:'New folder'}).click();
+  page.once('dialog',d=>d.accept('Export QA / Nested'));
+  await page.getByRole('button',{name:'Move collection Getting started to folder'}).click();
+  await page.getByRole('textbox',{name:'Request URL'}).fill('http://127.0.0.1:4311/echo?roundtrip=yes');
+  await page.getByRole('button',{name:/Save request/}).click();
+  await expect(page.locator('.toast')).toContainText('Request saved');
+  const original=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);
+  await page.getByRole('button',{name:'Workspace actions'}).click();
+  page.once('dialog',d=>d.accept());
+  const downloadPromise=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Export workspace as JSON'}).click();
+  const download=await downloadPromise;
+  const exported=JSON.parse(await readFile(await download.path(),'utf8'));
+  expect(exported.collections).toEqual(original.collections);
+  expect(exported.folders).toEqual(original.folders);
+  page.once('dialog',d=>d.accept());
+  await importJson(page,exported);
+  await expect(page.locator('.toast')).toContainText('Workspace restored');
+  await page.reload();
+  const restored=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);
+  expect(restored.collections).toEqual(original.collections);
+  expect(restored.folders).toEqual(original.folders);
+});
+test('repeated Postman imports are additive and never execute imported scripts',async({page})=>{
+  await page.goto('/');
+  page.on('dialog',d=>d.accept());
+  const data={info:{name:'Repeated QA'},item:[{name:'Fake request',request:{method:'GET',url:'http://127.0.0.1:4311/echo'},event:[{listen:'test',script:{exec:['window.qaImportedScript=true']}}]}]};
+  for(let i=0;i<2;i++){
+    await importJson(page,data);
+    await expect(page.locator('.toast')).toContainText('Postman collection imported');
+  }
+  const workspace=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);
+  expect(workspace.collections.filter(c=>c.name.startsWith('Repeated QA'))).toHaveLength(2);
+  expect(new Set(workspace.collections.flatMap(c=>c.requests.map(r=>r.id))).size).toBe(3);
+  expect(await page.evaluate(()=>window.qaImportedScript)).toBeUndefined();
+  await expect(page.locator('.alert.warning')).toContainText('scripts');
 });

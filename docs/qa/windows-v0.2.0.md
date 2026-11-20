@@ -12,7 +12,7 @@ release installer; that binary-to-installer comparison was not performed.
 
 The published baseline passed 60 existing unit tests, TypeScript and production
 Angular build locally. Expanded baseline regressions reproduced defects below.
-The corrected source passed **76 browser E2E tests**, with no skips or retries,
+The corrected source passed **81 browser E2E tests**, with no skips or retries,
 using an isolated Chrome profile and a real HTTP fixture bound to 127.0.0.1:4311.
 Desktop-vault browser tests simulate IPC: they are **not native DPAPI evidence**.
 The expanded unit suite contains **65 tests**. The PR's required CI checks are
@@ -52,8 +52,8 @@ were used for this mission.
 | Keyboard new/save/send/close | Passed | Actual keyboard events in browser E2E |
 | Twelve-tab limit | Passed | 12 drafts retained; 13th rejected with feedback |
 | Concurrent requests across tabs | Known limitation | v0.2.0 explicitly serializes execution and blocks switching/opening/closing during a request; real HTTP E2E verifies this |
-| Collections create/delete, request moves | Partial | Browser create/move passed; native destructive collection deletion not tested locally |
-| Nested folders, moving Collections | Passed | Folder unit tests, browser reload; native CI gate |
+| Collections create/delete, request moves | Passed in browser | Create/move, delete cancel/confirm and unrelated-data persistence; native destructive collection deletion not tested locally |
+| Nested folders, moving Collections, remove parent | Passed | Folder unit tests; browser reload and parent removal preserving child/request data; native CI gate |
 | Filter; expand/collapse; sidebar resize/compact | Passed | Sidebar browser E2E, preference unit tests; existing native CI coverage |
 | Collection/environment/request capacity | Passed | Unit parser guards and browser collection-capacity rejection; 2,000 saved requests plus History parse without loss |
 | GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS | Passed | Real localhost browser HTTP, all seven methods; native HTTP CI gate |
@@ -78,10 +78,10 @@ were used for this mission.
 | Postman Environment | Passed | Browser import/reload then real variable-resolved HTTP; native file-input CI gate |
 | API Studio restore and cancel | Passed | Existing restore-cancel E2E + native backup parser unit tests |
 | Invalid/malicious import | Passed | Invalid JSON, cycles, excessive depth/capacity, duplicate saved identities fail closed; scripts are never executed |
-| Repeated Postman import | Known behavior | Imports are additive with fresh IDs; intentional repeated imports can create extra Collections; no deduplication promise |
+| Repeated Postman import | Passed, known behavior | Browser imports twice, verifies unique IDs and warning that scripts are not executed; imports intentionally remain additive |
 | Native Windows OS file picker | Not Tested locally | Automated WebView2 setInputFiles does not prove the OS picker; follow-up #9 remains open |
-| Export/restore roundtrip | Partial | Workspace/folder unit roundtrip; actual OS export file roundtrip not tested locally |
-| History persistence/redaction | Passed | Browser HTTP/privacy tests, unit sanitization; native migration/restart CI gate |
+| Export/restore roundtrip | Passed in browser | Read actual downloaded JSON, compare saved requests/folders and import it with confirmation; reload retains identical data. Native OS save/file-picker dialogs not tested locally |
+| History persistence/redaction/clear | Passed | Browser HTTP/privacy, clear cancel/confirm without removing saved requests, unit sanitization; native migration/restart CI gate |
 | History records sent snapshot | Fixed | Reproduced baseline storing `/never-sent` instead of `/delay`; corrected HTTP E2E passes |
 | Windows CurrentUser DPAPI / no-password startup | CI gate | Real installed-MSI CI migration/restart assertions; local installed storage indicator alone is not cryptographic evidence |
 | Optional passphrase/wrong password/persistent choice | CI gate | Existing disposable installed WebView2 acceptance; browser IPC simulation and AES-GCM unit tests separately pass |
