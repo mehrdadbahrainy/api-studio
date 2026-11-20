@@ -43,6 +43,6 @@ test('Help/About reports no update when current installed patch is latest stable
   const modal=page.getByRole('dialog',{name:'API Studio'});
   await expect(modal).toContainText('0.2.1');
   await modal.getByRole('button',{name:'Check for updates'}).click();
-  await expect(modal).toContainText('Up to date');
+  await expect(modal).toContainText('No newer stable release is available.');
   await expect(modal.getByRole('link',{name:'Open release & download'})).toHaveCount(0);
 });
