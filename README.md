@@ -18,6 +18,17 @@
 
 API Studio is built with **Angular 21 + Tauri 2** and licensed under **MIT**. The verified public installers are **Windows x64 only**; the browser development preview has different storage and network restrictions.
 
+## v0.2.2 — Corrective release for local Windows QA
+
+This new patch packages the **source fixes found by local testing of v0.2.1**. The previously published v0.2.1 installer does not contain these fixes.
+
+- **No silent field truncation (P1):** oversized request bodies, URLs, credentials or table rows are rejected *before* Save/Import/Restore. A failed save preserves the previous stored workspace and the current unsaved edits.
+- **Dialog keyboard isolation (P2):** opening Help/About or other modals blocks Ctrl+Enter and other background request shortcuts. Focus is kept within the active dialog and restored on close.
+- **Windows storage validation:** the same size/shape constraints apply before DPAPI or optional passphrase-encrypted persistence. A corrupt or over-limit original is preserved, not rewritten.
+- Unit, browser real HTTP and installed Windows MSI regression tests verify these cases. See [local QA finding](docs/qa/v0.2.1-field-integrity.md) and [Issue #20](https://github.com/mehrdadbahrainy/api-studio/issues/20).
+
+**Upgrade precautions:** export a private workspace backup first. Old data already truncated by earlier releases cannot be reconstructed automatically. Actual native OS file picker, legacy v0.1.2 vault migration and personal-profile destructive cases remain unverified. Do not regard CI success as a guarantee for all Windows configurations.
+
 ## v0.2.1 — Windows QA stability patch
 
 **Install v0.2.1 instead of the original v0.2.0 if you are upgrading or installing now.** Four verified Windows/local HTTP QA defects were fixed in source after v0.2.0 was already published, so its previously published installer was not retroactively patched:
