@@ -21,11 +21,16 @@ function object(value: unknown): Source {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Source : {};
 }
 function array(value: unknown): unknown[] { return Array.isArray(value) ? value : []; }
+function rows(value:unknown):unknown[] {
+  const result=array(value);
+  if(result.length>MAX_ROWS)throw new Error('Import contains too many rows (200 row limit). Existing data was not changed.');
+  return result;
+}
 function str(value: unknown): string {
   return typeof value === 'string' ? value : value === null || value === undefined ? '' : String(value);
 }
 function entries(value: unknown): KeyValue[] {
-  return array(value).slice(0, MAX_ROWS).map(value => {
+  return rows(value).map(value => {
     const entry = object(value);
     return { ...row(str(entry.key), str(entry.value)), enabled: entry.disabled !== true && entry.enabled !== false };
   }).filter(entry => !!entry.key);
@@ -85,10 +90,10 @@ function makeRequest(item: Source, inheritedAuth: unknown, warnings: Set<string>
   }
   const draft = freshRequest();
   draft.id = makeId();
-  draft.name = str(item.name).slice(0, 160) || 'Untitled request';
+  draft.name = str(item.name) || 'Untitled request';
   draft.method = method as RequestDraft['method'];
   const parsedUrl = makeUrl(request.url);
-  draft.url = parsedUrl.url.slice(0, 16000);
+  draft.url = parsedUrl.url;
   draft.params = parsedUrl.params;
   draft.headers = entries(request.header);
   draft.formData = [];
@@ -106,7 +111,7 @@ function makeRequest(item: Source, inheritedAuth: unknown, warnings: Set<string>
     const language = str(object(object(body.options).raw).language).toLowerCase();
     const jsonHeader = draft.headers.some(h => h.key.toLowerCase() === 'content-type' && /[/+]json\b/i.test(h.value));
     draft.bodyMode = language === 'json' || jsonHeader ? 'json' : 'text';
-    draft.body = str(body.raw).slice(0, 2_000_000);
+    draft.body = str(body.raw);
     if (language === 'graphql') warnings.add('GraphQL bodies are imported as plain text and may need manual editing.');
   } else if (mode === 'urlencoded') {
     draft.bodyMode = 'urlencoded';
@@ -127,7 +132,7 @@ function makeRequest(item: Source, inheritedAuth: unknown, warnings: Set<string>
   return draft;
 }
 function postmanVariables(raw: unknown): KeyValue[] {
-  return array(raw).slice(0, MAX_ROWS).map(value => {
+  return rows(raw).map(value => {
     const entry = object(value);
     return { ...row(str(entry.key), str(entry.value)), enabled: entry.disabled !== true && entry.enabled !== false };
   }).filter(x => x.key.trim() !== '');
@@ -144,7 +149,7 @@ function importCollection(raw: Source, workspace: Workspace): ImportResult {
   const schema = str(info.schema);
   if (schema && !/\/collection\/v2\.[01]\./i.test(schema))
     throw new Error('Only Postman Collection v2.0 and v2.1 JSON exports are supported.');
-  const name = str(info.name).trim().slice(0, 120) || 'Postman collection';
+  const name = str(info.name).trim() || 'Postman collection';
   const groups: Collection[] = [];
   const newFolders:Folder[]=[];
   const byPath = new Map<string, Collection>();
@@ -157,7 +162,7 @@ function importCollection(raw: Source, workspace: Workspace): ImportResult {
     if (!found) {
       const plan=ensureFolderPath([...(workspace.folders??[]),...newFolders],path.slice(0,-1));
       newFolders.splice(0,newFolders.length,...plan.folders.slice((workspace.folders??[]).length));
-      found = { id: makeId(), name: key.slice(0, 120), requests: [],...(plan.id?{folderId:plan.id}:{}) };
+      found = { id: makeId(), name: key, requests: [],...(plan.id?{folderId:plan.id}:{}) };
       byPath.set(key, found);
       groups.push(found);
     }
@@ -187,7 +192,7 @@ function importCollection(raw: Source, workspace: Workspace): ImportResult {
   if (array(raw.event).length) warnings.add('Postman pre-request and test scripts are not imported or executed.');
   walk(array(raw.item), [name], raw.auth, 0);
   const vars = postmanVariables(raw.variable);
-  const env: Environment | null = vars.length ? { id: makeId(), name: (name + ' variables').slice(0, 120), variables: vars } : null;
+  const env: Environment | null = vars.length ? { id: makeId(), name: name + ' variables', variables: vars } : null;
   verifyCapacity(workspace, groups.length, count, env ? 1 : 0);
   if (!groups.length && !env) throw new Error('No supported Postman requests or variables were found.');
   const next: Workspace = {
@@ -206,7 +211,7 @@ function importEnvironment(raw: Source, workspace: Workspace): ImportResult {
   const vars = postmanVariables(raw.values);
   if (!vars.length) throw new Error('Postman environment contains no variables to import.');
   verifyCapacity(workspace, 0, 0, 1);
-  const env: Environment = { id: makeId(), name: str(raw.name).slice(0, 120) || 'Postman environment', variables: vars };
+  const env: Environment = { id: makeId(), name: str(raw.name) || 'Postman environment', variables: vars };
   return { kind: 'postman-environment', workspace: { ...workspace, environments: [...workspace.environments, env],
     selectedEnvironmentId: env.id }, importedRequests: 0, importedCollections: 0, warnings: [], firstRequestId: null };
 }
@@ -218,9 +223,15 @@ export function parseImportedJson(raw: unknown, current: Workspace): ImportResul
     return { kind: 'native', workspace, importedRequests: workspace.collections.reduce((n, c) => n + c.requests.length, 0),
       importedCollections: workspace.collections.length, warnings: [], firstRequestId: workspace.collections.flatMap(c => c.requests)[0]?.id ?? null };
   }
-  if (Array.isArray(input.item) && Object.keys(object(input.info)).length)
-    return importCollection(input, current);
-  if (Array.isArray(input.values) && (input._postman_variable_scope === 'environment' || typeof input.name === 'string'))
-    return importEnvironment(input, current);
+  if (Array.isArray(input.item) && Object.keys(object(input.info)).length){
+    const result=importCollection(input,current);
+    parseWorkspace(result.workspace);
+    return result;
+  }
+  if (Array.isArray(input.values) && (input._postman_variable_scope === 'environment' || typeof input.name === 'string')){
+    const result=importEnvironment(input,current);
+    parseWorkspace(result.workspace);
+    return result;
+  }
   throw new Error('Unrecognized JSON format. Import an API Studio workspace, Postman Collection v2.0/v2.1, or Postman environment export.');
 }

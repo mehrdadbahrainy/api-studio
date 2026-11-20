@@ -62,6 +62,7 @@ export async function deriveVaultKey(passphrase: string, salt: Uint8Array): Prom
   );
 }
 export async function encryptWorkspace(workspace: Workspace, key: CryptoKey, salt: Uint8Array): Promise<string> {
+  parseWorkspace(workspace);
   const crypto = requireCrypto();
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await crypto.subtle.encrypt(

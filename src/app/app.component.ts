@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, HostListener, OnDestroy } from '@angular/core';
+import { AfterViewChecked, Component, HostListener, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { isTauri, invoke } from '@tauri-apps/api/core';
 import { SecureWorkspace, describeVaultError } from './core/secure-workspace';
@@ -13,7 +13,7 @@ import { collectionNavigation, ensureFolderPath, folderBreadcrumb, NavigationIte
 import { CHANGELOG_URL, DOCUMENTATION_URL, ISSUES_URL, LICENSE_URL, PERSIAN_GUIDE_URL, SOURCE_REPOSITORY, UpdateStatus } from './core/release-catalog';
 import { executeRequest } from './core/http-transport';
 import { loadWorkspace, saveWorkspace, downloadJson } from './core/storage';
-import { addHistory, MAX_COLLECTIONS, MAX_REQUESTS, MAX_ENVIRONMENTS } from './core/workspace-utils';
+import { addHistory, parseWorkspace, MAX_COLLECTIONS, MAX_REQUESTS, MAX_ENVIRONMENTS } from './core/workspace-utils';
 import { parseImportedJson } from './core/import-json';
 import { activeVariables, readableBytes, RequestValidationError } from './core/request-utils';
 import { RequestTransportError } from './core/network-errors';
@@ -35,7 +35,7 @@ interface OpenRequestTab {
   selector:'app-root',standalone:true,imports:[CommonModule,FormsModule],
   templateUrl:'./app.component.html',styleUrl:'./app.component.scss'
 })
-export class AppComponent implements OnDestroy {
+export class AppComponent implements OnDestroy, AfterViewChecked {
   readonly methods:HttpMethod[]=['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'];
   readonly isDesktop=isTauri();
   readonly bytes=readableBytes;
@@ -94,6 +94,28 @@ export class AppComponent implements OnDestroy {
   responseHeight=340;
   private controller:AbortController|null=null;
   private notificationTimer:ReturnType<typeof setTimeout>|null=null;
+  private focusedDialog:HTMLElement|null=null;
+  private focusBeforeDialog:HTMLElement|null=null;
+  private workspaceLoadBlocked=false;
+
+  private dialogControls(dialog:HTMLElement):HTMLElement[] {
+    return Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]'))
+      .filter(element=>element.tabIndex>=0 && element.getClientRects().length>0);
+  }
+  ngAfterViewChecked():void {
+    const dialog=document.querySelector<HTMLElement>('section[aria-modal="true"]');
+    if(dialog===this.focusedDialog)return;
+    if(dialog){
+      if(!this.focusedDialog)this.focusBeforeDialog=document.activeElement instanceof HTMLElement?document.activeElement:null;
+      this.focusedDialog=dialog;
+      dialog.tabIndex=-1;
+      (this.dialogControls(dialog)[0]??dialog).focus({preventScroll:true});
+    }else{
+      const previous=this.focusBeforeDialog;
+      this.focusedDialog=null;this.focusBeforeDialog=null;
+      if(previous?.isConnected)previous.focus({preventScroll:true});
+    }
+  }
 
   constructor() {
     const savedLayout=readSidebarPreferences(typeof localStorage==='undefined'?null:localStorage);
@@ -102,8 +124,9 @@ export class AppComponent implements OnDestroy {
     this.collapsedCollectionIds=new Set(savedLayout.collapsedCollectionIds);
     this.vaultLocked=this.isDesktop;
     this.vaultStarting=this.isDesktop;
-    const state=this.isDesktop ? {workspace:initialWorkspace(),warning:''} : loadWorkspace();
+    const state=this.isDesktop ? {workspace:initialWorkspace(),warning:'',blocked:false} : loadWorkspace();
     this.workspace=state.workspace;this.warning=state.warning;
+    this.workspaceLoadBlocked=state.blocked===true;
     const first=this.workspace.collections.flatMap(c=>c.requests)[0];
     this.draft=first?copyRequest(first):freshRequest();
     this.activeRequestId=first?.id??null;
@@ -480,6 +503,15 @@ export class AppComponent implements OnDestroy {
   closePopup():void{this.showMenu=false;}
   inform(text:string):void {this.notice=text;if(this.notificationTimer)clearTimeout(this.notificationTimer);this.notificationTimer=setTimeout(()=>this.notice='',2800);}
   async persist():Promise<boolean> {
+    if(this.workspaceLoadBlocked){
+      this.warning='Previous workspace could not be read and was preserved. Restore a valid API Studio backup explicitly before saving.';
+      return false;
+    }
+    try{parseWorkspace(this.workspace);}
+    catch(error){
+      this.warning='Workspace validation failed. Nothing was saved. '+(error instanceof Error?error.message:'Invalid workspace.');
+      return false;
+    }
     if (this.isDesktop) {
       if (this.vaultLocked || !this.secureWorkspace) return false;
       // Snapshot active editor IDs at every committed write, including Save
@@ -650,6 +682,7 @@ export class AppComponent implements OnDestroy {
       catch { throw new Error('Invalid JSON file. Export a valid JSON collection from Postman or API Studio.'); }
       const result=parseImportedJson(json,this.workspace);
       const native=result.kind==='native';
+      if(this.workspaceLoadBlocked && !native)throw new Error('Previous workspace could not be read and was preserved. Restore a valid API Studio backup before additive imports.');
       const prompt=native
         ? 'Replace ALL current collections, environments and history with this API Studio backup? Make an export first if needed.'
         : result.kind==='postman-collection'
@@ -657,9 +690,12 @@ export class AppComponent implements OnDestroy {
           : 'Add this Postman environment to your existing workspace? The imported environment will become active. Imported JSON may contain secrets.';
       if(!confirm(prompt))return;
       const original=this.workspace;
+      const originallyBlocked=this.workspaceLoadBlocked;
       this.workspace=result.workspace;
+      if(native)this.workspaceLoadBlocked=false;
       if(!(await this.persist())){
         this.workspace=original;
+        this.workspaceLoadBlocked=originallyBlocked;
         this.error='Import was not saved. Existing workspace remains open; check storage permissions and retry.';
         return;
       }
@@ -677,6 +713,23 @@ export class AppComponent implements OnDestroy {
   }
   clearHistory():void{if(!confirm('Clear request history? Saved collections will not be changed.'))return;this.workspace.history=[];this.persist();}
   @HostListener('document:keydown',['$event']) onShortcut(event:KeyboardEvent):void {
+    const dialog=document.querySelector<HTMLElement>('section[aria-modal="true"]');
+    if(dialog || this.showHelp || this.showEnvironments || this.showSecurityDialog || this.pendingCloseTabKey){
+      if(event.key==='Escape'){
+        event.preventDefault();
+        this.showHelp=false;this.showEnvironments=false;this.pendingCloseTabKey=null;
+        if(!this.securityWorking)this.showSecurityDialog=false;
+      }else if(event.key==='Tab'){
+        event.preventDefault();
+        if(dialog){
+          const controls=this.dialogControls(dialog);
+          const index=controls.indexOf(document.activeElement as HTMLElement);
+          const next=index<0?(event.shiftKey?controls.length-1:0):(index+(event.shiftKey?-1:1)+controls.length)%controls.length;
+          (controls[next]??dialog).focus();
+        }
+      }else if((event.ctrlKey||event.metaKey) && ['enter','s','n','w'].includes(event.key.toLowerCase()))event.preventDefault();
+      return;
+    }
     if(this.vaultLocked || !(event.ctrlKey||event.metaKey))return;
     if(event.key==='Enter'){event.preventDefault();void this.send();}
     if(event.key.toLowerCase()==='s'){event.preventDefault();this.saveRequest();}

@@ -49,3 +49,9 @@ test('short passphrases and unsupported workspace metadata are rejected', async 
   await assert.rejects(deriveVaultKey('too short', createSalt()), /at least 12/);
   await assert.rejects(decryptWorkspace('valid password here', '{}'), /Unsupported or damaged/);
 });
+test('encryption rejects a workspace that could not be restored losslessly',async()=>{
+  const workspace=initialWorkspace();workspace.collections[0].requests[0].body='x'.repeat(2000001);
+  const salt=createSalt(),key=await deriveVaultKey('synthetic oversized vault password',salt);
+  await assert.rejects(encryptWorkspace(workspace,key,salt),/Request body exceeds/);
+  assert.equal(workspace.collections[0].requests[0].body.length,2000001);
+});

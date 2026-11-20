@@ -78,6 +78,22 @@ async function nativeImportAcceptance(page) {
   console.log('PASS: installed WebView2 file-input imports Postman v2.0/v2.1/environment and rejects malformed JSON (OS file-picker interaction remains separate coverage)');
 }
 
+async function nativeFieldIntegrityAcceptance(page) {
+  const original=await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('read_protected_workspace'));
+  await page.getByRole('combobox',{name:'HTTP method'}).selectOption('POST');
+  await page.locator('.editor-tabs').getByRole('button',{name:'Body',exact:true}).click();
+  await page.getByRole('radio',{name:'JSON',exact:true}).check();
+  await page.getByRole('textbox',{name:'Request body'}).fill(JSON.stringify({payload:'x'.repeat(2000000)}));
+  await page.getByRole('button',{name:/Save request/}).click();
+  await expect(page.locator('.alert.warning')).toContainText('Request body exceeds');
+  const retained=await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('read_protected_workspace'));
+  if(retained!==original)throw new Error('Oversize edit replaced the valid native workspace');
+  await page.getByRole('textbox',{name:'Request body'}).fill('{}');
+  await page.getByRole('button',{name:/Save request/}).click();
+  await expect(page.locator('.toast')).toContainText('Request saved');
+  console.log('PASS: oversize request body rejected before native DPAPI write; previous workspace retained and valid edit can retry');
+}
+
 async function stop() {
   try { await browser?.close(); } catch {}
   browser = null;
@@ -180,7 +196,18 @@ async function main() {
   await page.getByRole('button',{name:'Expand sidebar'}).click();
   await expect(page.locator('.sidebar')).not.toHaveClass(/is-collapsed/);
   console.log('PASS: installed WebView2 collection disclosure and sidebar layout controls');
+  await page.getByRole('textbox',{name:'Request URL'}).fill('http://127.0.0.1:4311/echo?modal=background');
+  await page.getByRole('button',{name:'Help and About'}).click();
+  await expect(page.getByRole('button',{name:'Close Help and About'})).toBeFocused();
+  await page.keyboard.press('Control+Enter');
+  await delay(300);
+  await expect(page.locator('.response-code')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog',{name:'API Studio'})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Help and About'})).toBeFocused();
+  console.log('PASS: installed dialog owns keyboard focus and blocks hidden HTTP request shortcut');
   await realHttpAcceptance(page);
+  await nativeFieldIntegrityAcceptance(page);
   await nativeImportAcceptance(page);
 
   await page.evaluate(async ([storageKey, data]) => {

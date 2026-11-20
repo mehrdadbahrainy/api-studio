@@ -4,9 +4,19 @@ export const MAX_COLLECTIONS = 150;
 export const MAX_REQUESTS = 2000;
 export const MAX_ENVIRONMENTS = 80;
 const MAX_HISTORY = 80;
+function boundedText(raw:unknown,limit:number,label:string):string {
+  const value=String(raw??'');
+  if(value.length>limit)throw new Error(`${label} exceeds the ${limit.toLocaleString('en-US')}-character workspace limit.`);
+  return value;
+}
 export function cleanRows(raw: unknown): KeyValue[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.slice(0,200).filter(x=>x && typeof x === 'object').map(x=>({id:typeof x.id === 'string'?x.id:makeId(),enabled:x.enabled!==false,key:String(x.key??'').slice(0,512),value:String(x.value??'').slice(0,100000)}));
+  if(raw===undefined || raw===null)return [];
+  if(!Array.isArray(raw))throw new Error('Workspace rows must be an array.');
+  if(raw.length>200)throw new Error('Workspace contains too many rows (200 row limit).');
+  return raw.map(x=>{
+    if(!x || typeof x!=='object' || Array.isArray(x))throw new Error('Invalid workspace row.');
+    return {id:typeof x.id==='string'?x.id:makeId(),enabled:x.enabled!==false,key:boundedText(x.key,512,'Row key'),value:boundedText(x.value,100000,'Row value')};
+  });
 }
 export function parseWorkspace(raw: unknown): Workspace {
   if (!raw || typeof raw !== 'object' || (raw as {version?:unknown}).version !== 1) throw new Error('Not an API Studio workspace (version 1).');
@@ -30,12 +40,12 @@ export function parseWorkspace(raw: unknown): Workspace {
       if(!d.id || requestIds.has(d.id))throw new Error('Duplicate request identifiers.');
       requestIds.add(d.id);
     }
-    d.name=String(r.name??'Untitled request').slice(0,160);
-    d.method=methods.has(r.method)?r.method:'GET';d.url=String(r.url??'').slice(0,16000);
+    d.name=boundedText(r.name??'Untitled request',160,'Request name');
+    d.method=methods.has(r.method)?r.method:'GET';d.url=boundedText(r.url,16000,'Request URL');
     d.params=cleanRows(r.params);d.headers=cleanRows(r.headers);
-    d.bodyMode=bodyModes.has(r.bodyMode)?r.bodyMode:'none';d.body=String(r.body??'').slice(0,2_000_000);d.formData=cleanRows(r.formData);
-    d.authMode=authModes.has(r.authMode)?r.authMode:'none';d.bearerToken=String(r.bearerToken??'').slice(0,10000);
-    d.basicUsername=String(r.basicUsername??'').slice(0,1000);d.basicPassword=String(r.basicPassword??'').slice(0,10000);
+    d.bodyMode=bodyModes.has(r.bodyMode)?r.bodyMode:'none';d.body=boundedText(r.body,2_000_000,'Request body');d.formData=cleanRows(r.formData);
+    d.authMode=authModes.has(r.authMode)?r.authMode:'none';d.bearerToken=boundedText(r.bearerToken,10000,'Bearer token');
+    d.basicUsername=boundedText(r.basicUsername,1000,'Basic username');d.basicPassword=boundedText(r.basicPassword,10000,'Basic password');
     return d;
   };
   // Optional additive folder data keeps all v0.1.x version:1 workspace backups valid.
@@ -44,7 +54,7 @@ export function parseWorkspace(raw: unknown): Workspace {
   const folders:Folder[]=(Array.isArray(input.folders)?input.folders:[]).map((folder:any)=>{
     if(!folder||typeof folder!=='object'||typeof folder.id!=='string'||!folder.id||typeof folder.name!=='string'||!folder.name.trim())
       throw new Error('Invalid workspace folder.');
-    return {id:folder.id.slice(0,128),name:folder.name.trim().slice(0,120),parentId:typeof folder.parentId==='string'?folder.parentId:null};
+    return {id:boundedText(folder.id,128,'Folder identifier'),name:boundedText(folder.name.trim(),120,'Folder name'),parentId:typeof folder.parentId==='string'?folder.parentId:null};
   });
   const folderIds=new Set(folders.map(f=>f.id));
   if(folderIds.size!==folders.length)throw new Error('Duplicate folder identifiers.');
@@ -65,10 +75,18 @@ export function parseWorkspace(raw: unknown): Workspace {
     const id=typeof c.id==='string'?c.id:makeId();
     if(!id || collectionIds.has(id))throw new Error('Duplicate collection identifiers.');
     collectionIds.add(id);
-    return {id,name:String(c.name??'Untitled collection').slice(0,120),requests:Array.isArray(c.requests)?c.requests.map((r:any)=>parseRequest(r,id)):[],
+    if(c.requests!==undefined && !Array.isArray(c.requests))throw new Error('Collection requests must be an array.');
+    return {id,name:boundedText(c.name??'Untitled collection',120,'Collection name'),requests:Array.isArray(c.requests)?c.requests.map((r:any)=>parseRequest(r,id)):[],
       ...(typeof c.folderId==='string'&&folderIds.has(c.folderId)?{folderId:c.folderId}:{})};
   });
-  const environments:Environment[]=input.environments.map((e:any)=>({id:typeof e?.id==='string'?e.id:makeId(),name:String(e?.name??'Environment').slice(0,120),variables:cleanRows(e?.variables)}));
+  const environmentIds=new Set<string>();
+  const environments:Environment[]=input.environments.map((e:any)=>{
+    if(!e || typeof e!=='object' || Array.isArray(e))throw new Error('Invalid environment.');
+    const id=typeof e.id==='string'?e.id:makeId();
+    if(!id || environmentIds.has(id))throw new Error('Duplicate environment identifiers.');
+    environmentIds.add(id);
+    return {id,name:boundedText(e.name??'Environment',120,'Environment name'),variables:cleanRows(e.variables)};
+  });
   const history:HistoryEntry[]=Array.isArray(input.history)?input.history.slice(0,MAX_HISTORY).filter((h:any)=>h && typeof h==='object').map((h:any)=>({id:typeof h.id==='string'?h.id:makeId(),at:String(h.at??''),request:redactHistoryRequest(parseRequest(h.request??{},null)),status:typeof h.status==='number'?h.status:null,durationMs:typeof h.durationMs==='number'?h.durationMs:null})):[];
   const selectedEnvironmentId=environments.some(e=>e.id===input.selectedEnvironmentId)?input.selectedEnvironmentId:null;
   // Saved tab IDs are nonsecret UI navigation metadata. Preserve them within

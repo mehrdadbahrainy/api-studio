@@ -53,6 +53,7 @@ export class SystemWorkspace {
   }
 
   save(workspace: Workspace): Promise<void> {
+    parseWorkspace(workspace);
     const snapshot = JSON.stringify(workspace);
     const operation = this.pending.catch(() => undefined).then(async () => {
       await invoke('write_protected_workspace', {payload:snapshot});
