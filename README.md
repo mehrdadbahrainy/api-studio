@@ -18,6 +18,17 @@
 
 API Studio is built with **Angular 21 + Tauri 2** and licensed under **MIT**. The verified public installers are **Windows x64 only**; the browser development preview has different storage and network restrictions.
 
+## v0.2.1 — Windows QA stability patch
+
+**Install v0.2.1 instead of the original v0.2.0 if you are upgrading or installing now.** Four verified Windows/local HTTP QA defects were fixed in source after v0.2.0 was already published, so its previously published installer was not retroactively patched:
+
+- Workspace backup validation now rejects excessive Collections/environments and duplicate saved request IDs **without truncating data**.
+- Request duration includes streamed response-body download.
+- Oversized responses explain the 5 MB transport limit instead of offering an unavailable binary download.
+- Request History captures the request actually sent rather than subsequent edits to its open tab.
+
+These changes are a backwards-compatible corrective release, not a change to the workspace format. The previous v0.2.0 binaries and tags are intentionally immutable. Read [the patch changelog](CHANGELOG.md) and [Windows QA evidence](docs/qa/windows-v0.2.0.md) for test scope and untested native OS cases. Export a **private** backup before upgrading. Native Windows DPAPI data belongs to the original Windows account. Windows installers remain unsigned.
+
 ## New in v0.2.0
 
 - **Multiple request tabs:** keep several requests open, with independent drafts and response views, unsaved change indicators, Save/Discard/Cancel on close and recovery of saved tabs after restart.
