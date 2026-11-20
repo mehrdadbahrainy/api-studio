@@ -156,6 +156,8 @@ jobs:
           Get-ItemProperty -Path $key | Format-List
       - name: Real installed WebView2 vault migration and restart E2E
         shell: pwsh
+        env:
+          API_STUDIO_DISPOSABLE_RUNNER: '1'
         run: node tests/desktop/native-smoke.mjs
       - name: Remove CI-only WebView2 debugging policy
         if: always()

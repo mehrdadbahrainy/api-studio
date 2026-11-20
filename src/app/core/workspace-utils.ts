@@ -1,7 +1,8 @@
 import { Collection, Environment, Folder, HistoryEntry, KeyValue, RequestDraft, Workspace, copyRequest, freshRequest, initialWorkspace, makeId } from './models';
 import { parseTabPreferences, resolveSavedTabIds } from './editor-tab-state';
-const MAX_COLLECTIONS = 150;
-const MAX_REQUESTS = 2000;
+export const MAX_COLLECTIONS = 150;
+export const MAX_REQUESTS = 2000;
+export const MAX_ENVIRONMENTS = 80;
 const MAX_HISTORY = 80;
 export function cleanRows(raw: unknown): KeyValue[] {
   if (!Array.isArray(raw)) return [];
@@ -11,15 +12,24 @@ export function parseWorkspace(raw: unknown): Workspace {
   if (!raw || typeof raw !== 'object' || (raw as {version?:unknown}).version !== 1) throw new Error('Not an API Studio workspace (version 1).');
   const input = raw as Record<string,any>;
   if (!Array.isArray(input.collections) || !Array.isArray(input.environments)) throw new Error('Workspace must contain collections and environments.');
+  if(input.collections.length>MAX_COLLECTIONS)throw new Error('Workspace contains too many collections.');
+  if(input.environments.length>MAX_ENVIRONMENTS)throw new Error('Workspace contains too many environments.');
   const methods = new Set(['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS']);
   const bodyModes = new Set(['none','json','text','urlencoded','formdata']);
   const authModes = new Set(['none','bearer','basic']);
   let count=0;
+  const requestIds=new Set<string>();
   const parseRequest = (r:any,collectionId:string|null):RequestDraft=>{
     if (!r || typeof r!=='object') throw new Error('Invalid saved request.');
-    count++;if(count>MAX_REQUESTS) throw new Error('Workspace contains too many requests.');
+    if(collectionId!==null){count++;if(count>MAX_REQUESTS) throw new Error('Workspace contains too many requests.');}
     const d=freshRequest();
     d.id=typeof r.id==='string'?r.id:makeId();d.collectionId=collectionId;
+    // History can legitimately reference a saved request. Saved request IDs,
+    // however, must be unique across all Collections to make edits unambiguous.
+    if(collectionId!==null){
+      if(!d.id || requestIds.has(d.id))throw new Error('Duplicate request identifiers.');
+      requestIds.add(d.id);
+    }
     d.name=String(r.name??'Untitled request').slice(0,160);
     d.method=methods.has(r.method)?r.method:'GET';d.url=String(r.url??'').slice(0,16000);
     d.params=cleanRows(r.params);d.headers=cleanRows(r.headers);
@@ -49,13 +59,16 @@ export function parseWorkspace(raw: unknown): Workspace {
       parent=folderById.get(parent)!.parentId;
     }
   }
-  const collections:Collection[]=input.collections.slice(0,MAX_COLLECTIONS).map((c:any)=>{
+  const collectionIds=new Set<string>();
+  const collections:Collection[]=input.collections.map((c:any)=>{
     if(!c || typeof c!=='object') throw new Error('Invalid collection.');
     const id=typeof c.id==='string'?c.id:makeId();
+    if(!id || collectionIds.has(id))throw new Error('Duplicate collection identifiers.');
+    collectionIds.add(id);
     return {id,name:String(c.name??'Untitled collection').slice(0,120),requests:Array.isArray(c.requests)?c.requests.map((r:any)=>parseRequest(r,id)):[],
       ...(typeof c.folderId==='string'&&folderIds.has(c.folderId)?{folderId:c.folderId}:{})};
   });
-  const environments:Environment[]=input.environments.slice(0,80).map((e:any)=>({id:typeof e?.id==='string'?e.id:makeId(),name:String(e?.name??'Environment').slice(0,120),variables:cleanRows(e?.variables)}));
+  const environments:Environment[]=input.environments.map((e:any)=>({id:typeof e?.id==='string'?e.id:makeId(),name:String(e?.name??'Environment').slice(0,120),variables:cleanRows(e?.variables)}));
   const history:HistoryEntry[]=Array.isArray(input.history)?input.history.slice(0,MAX_HISTORY).filter((h:any)=>h && typeof h==='object').map((h:any)=>({id:typeof h.id==='string'?h.id:makeId(),at:String(h.at??''),request:redactHistoryRequest(parseRequest(h.request??{},null)),status:typeof h.status==='number'?h.status:null,durationMs:typeof h.durationMs==='number'?h.durationMs:null})):[];
   const selectedEnvironmentId=environments.some(e=>e.id===input.selectedEnvironmentId)?input.selectedEnvironmentId:null;
   // Saved tab IDs are nonsecret UI navigation metadata. Preserve them within

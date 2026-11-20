@@ -13,7 +13,7 @@ import { collectionNavigation, ensureFolderPath, folderBreadcrumb, NavigationIte
 import { CHANGELOG_URL, DOCUMENTATION_URL, ISSUES_URL, LICENSE_URL, PERSIAN_GUIDE_URL, SOURCE_REPOSITORY, UpdateStatus } from './core/release-catalog';
 import { executeRequest } from './core/http-transport';
 import { loadWorkspace, saveWorkspace, downloadJson } from './core/storage';
-import { addHistory } from './core/workspace-utils';
+import { addHistory, MAX_COLLECTIONS, MAX_REQUESTS, MAX_ENVIRONMENTS } from './core/workspace-utils';
 import { parseImportedJson } from './core/import-json';
 import { activeVariables, readableBytes, RequestValidationError } from './core/request-utils';
 import { RequestTransportError } from './core/network-errors';
@@ -512,6 +512,7 @@ export class AppComponent implements OnDestroy {
   }
   createCollection():void {
     const name=this.newCollectionName.trim();if(!name)return;
+    if(this.workspace.collections.length>=MAX_COLLECTIONS){this.inform('Workspace limit reached (150 collections).');return;}
     const collection:Collection={id:makeId(),name,requests:[]};
     this.workspace.collections.push(collection);this.collapsedCollectionIds.delete(collection.id);this.onCollectionSelection(collection.id);this.newCollectionName='';this.showCreateCollection=false;this.persist();this.inform('Collection created');
   }
@@ -541,6 +542,7 @@ export class AppComponent implements OnDestroy {
     const previousDestinationId=this.activeCollectionId;
     const copy=copyRequest(this.draft);copy.collectionId=destination.id;
     const previouslySaved=this.workspace.collections.flatMap(c=>c.requests).find(x=>x.id===this.activeRequestId);
+    if(!previouslySaved && this.totalRequests>=MAX_REQUESTS){this.error='Workspace limit reached (2,000 saved requests).';return;}
     if(previouslySaved){
       this.workspace.collections.forEach(c=>c.requests=c.requests.filter(r=>r.id!==previouslySaved.id));
       copy.id=previouslySaved.id;
@@ -586,18 +588,22 @@ export class AppComponent implements OnDestroy {
   }
   createRow(items:KeyValue[]):void {items.push(row());}
   removeRow(items:KeyValue[],id:string):void {const i=items.findIndex(x=>x.id===id);if(i>=0)items.splice(i,1);}
-  createEnvironment():void {const environment:Environment={id:makeId(),name:'New environment',variables:[row('baseUrl','http://localhost:3000')]};this.workspace.environments.push(environment);this.workspace.selectedEnvironmentId=environment.id;this.persist();}
+  createEnvironment():void {
+    if(this.workspace.environments.length>=MAX_ENVIRONMENTS){this.inform('Workspace limit reached (80 environments).');return;}
+    const environment:Environment={id:makeId(),name:'New environment',variables:[row('baseUrl','http://localhost:3000')]};this.workspace.environments.push(environment);this.workspace.selectedEnvironmentId=environment.id;this.persist();
+  }
   removeEnvironment(id:string):void {if(!confirm('Delete this environment?'))return;this.workspace.environments=this.workspace.environments.filter(e=>e.id!==id);if(this.workspace.selectedEnvironmentId===id)this.workspace.selectedEnvironmentId=null;this.persist();}
   changeEnvironment(id:string):void {this.workspace.selectedEnvironmentId=id||null;this.persist();}
   toggleEnvironmentDialog():void{this.showEnvironments=!this.showEnvironments;this.showMenu=false;}
   async send():Promise<void> {
     if(this.running || this.vaultLocked)return;
+    const sentDraft=copyRequest(this.draft);
     this.error='';this.response=null;this.responseTab='body';this.responseMode='formatted';this.running=true;
     this.controller=new AbortController();
     try {
-      const result=await executeRequest(this.draft,this.activeEnvironment,{signal:this.controller.signal});
+      const result=await executeRequest(sentDraft,this.activeEnvironment,{signal:this.controller.signal});
       this.response=result;
-      this.workspace.history=addHistory(this.workspace.history,this.draft,result.status,result.durationMs);
+      this.workspace.history=addHistory(this.workspace.history,sentDraft,result.status,result.durationMs);
       this.persist();
     }catch(err:unknown){
       const message=err instanceof Error?err.message:String(err);
@@ -605,7 +611,7 @@ export class AppComponent implements OnDestroy {
         ? 'Request cancelled.'
         : (err instanceof RequestValidationError || err instanceof RequestTransportError)
           ? message : 'Request failed unexpectedly. Please check the request and try again.';
-      this.workspace.history=addHistory(this.workspace.history,this.draft,null,null);this.persist();
+      this.workspace.history=addHistory(this.workspace.history,sentDraft,null,null);this.persist();
     }finally{this.running=false;this.controller=null;}
   }
   cancelRequest():void {this.controller?.abort();}

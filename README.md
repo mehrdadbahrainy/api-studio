@@ -66,6 +66,12 @@ Source modules include `src/app/core/import-json.ts` (Postman conversion), `src/
 
 ## Verification and releases
 
+[Windows v0.2.0 QA coverage and known limitations](docs/qa/windows-v0.2.0.md)
+distinguishes installed Windows observations, real localhost HTTP tests, browser
+storage simulations and outstanding native acceptance. Unreleased source fixes
+do not change the existing v0.2.0 installer. Requests currently run one at a time;
+finish or cancel an active request before switching tabs.
+
 Every stable release is gated on full unit/typecheck/Angular build, Chromium HTTP and UI E2E, a real Windows installer build and installed MSI/WebView2 startup, migration, restart and uninstall acceptance. The publisher reuses **the exact passing main commit's installers**, generates SHA256SUMS and never overwrites an existing release. [v0.1.4 release evidence](https://github.com/mehrdadbahrainy/api-studio/actions/runs/44063915754) is retained as history. Automated tests cannot prove compatibility on every Windows machine.
 
 ## What's next?
