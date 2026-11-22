@@ -201,7 +201,7 @@ function environmentWithRuntimeVariables(base: Environment | undefined, captures
   const entries = Object.keys(captures).map((key, index) => ({
     id: 'scenario-runtime-' + index, enabled: true, key, value: captures[key]
   }));
-  if (!entries.length) return base;
+  if (!entries.length && !base) return undefined;
   return {
     id: base?.id ?? 'scenario-runtime',
     name: base?.name ?? 'Scenario runtime',
@@ -222,9 +222,15 @@ export async function runScenario(
   validateScenario(definition);
   if (!Number.isInteger(options.timeoutMs ?? 30_000) || (options.timeoutMs ?? 30_000) < 1
     || (options.timeoutMs ?? 30_000) > 600_000) throw new Error('Invalid scenario timeout.');
+  // Snapshot saved drafts and the selected environment at run start. Edits in other
+  // tabs during a running scenario cannot silently alter later HTTP steps.
   const saved = new Map(workspace.collections.flatMap(collection =>
-    collection.requests.map(request => [request.id, request] as const)));
-  const baseEnvironment = options.environment ?? workspace.environments.find(item => item.id === workspace.selectedEnvironmentId);
+    collection.requests.map(request => [request.id, copyRequest(request)] as const)));
+  const selectedEnvironment = options.environment ?? workspace.environments.find(item => item.id === workspace.selectedEnvironmentId);
+  const baseEnvironment = selectedEnvironment ? {
+    ...selectedEnvironment,
+    variables: selectedEnvironment.variables.map(variable => ({ ...variable }))
+  } : undefined;
   const captures: Record<string, string> = Object.create(null);
   const results: ScenarioStepResult[] = [];
   let stop = false;
