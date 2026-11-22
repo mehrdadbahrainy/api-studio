@@ -227,3 +227,24 @@ test('transport exceptions never expose their raw URL or secrets in scenario rep
   assert.equal(result.failed, 1);
   assert.ok(!JSON.stringify(result).includes('secret'));
 });
+
+test('editing a saved draft or selected environment mid-run does not rewrite later network requests', async () => {
+  const workspace = fixture();
+  workspace.collections[0].requests[0].url = '{{baseUrl}}/auth/login';
+  workspace.selectedEnvironmentId = workspace.environments[0].id;
+  const run = { id: 'snapshot', name: 'Snapshots', stopOnFailure: true, steps: [
+    { id: 'one', requestId: 'login', assertions: [], extractions: [] },
+    { id: 'two', requestId: 'login', assertions: [], extractions: [] }
+  ] };
+  const sentUrls = [];
+  const result = await runScenario(run, workspace, async (draft, environment) => {
+    sentUrls.push(prepareRequest(draft, environment).url);
+    if (sentUrls.length === 1) {
+      workspace.collections[0].requests[0].url = 'http://unsafe.example/changed';
+      workspace.environments[0].variables.find(variable => variable.key === 'baseUrl').value = 'http://unsafe.example';
+    }
+    return response(200, '{}');
+  });
+  assert.deepEqual(sentUrls, ['http://localhost:3000/auth/login', 'http://localhost:3000/auth/login']);
+  assert.equal(result.passed, 2);
+});
