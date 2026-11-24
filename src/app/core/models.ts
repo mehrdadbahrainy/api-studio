@@ -1,3 +1,4 @@
+import type { ScenarioDefinition } from './scenario-runner';
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
 export type BodyMode = 'none' | 'json' | 'text' | 'urlencoded' | 'formdata';
 export type AuthMode = 'none' | 'bearer' | 'basic';
@@ -25,7 +26,7 @@ export interface Folder { id:string; name:string; parentId:string|null; }
 export interface Collection { id: string; name: string; requests: RequestDraft[]; folderId?:string|null; }
 export interface Environment { id: string; name: string; variables: KeyValue[]; }
 export interface HistoryEntry { id: string; at: string; request: RequestDraft; status: number | null; durationMs: number | null; }
-export interface Workspace { version: 1; collections: Collection[]; environments: Environment[]; selectedEnvironmentId: string | null; history: HistoryEntry[]; folders?:Folder[]; openTabState?: {requestIds:string[];activeRequestId:string|null}; }
+export interface Workspace { version: 1; collections: Collection[]; environments: Environment[]; selectedEnvironmentId: string | null; history: HistoryEntry[]; folders?:Folder[]; openTabState?: {requestIds:string[];activeRequestId:string|null}; scenarios?: ScenarioDefinition[]; }
 export interface HttpResult {
   status: number;
   statusText: string;
