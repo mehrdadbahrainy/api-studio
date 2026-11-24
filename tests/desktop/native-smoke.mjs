@@ -65,11 +65,18 @@ async function nativeScenarioAcceptance(page) {
   await page.getByRole('textbox',{name:'Request URL'}).fill(fixture+'/scenario/login');
   await page.getByRole('button',{name:/Save request/}).click();
   await expect(page.locator('.toast')).toContainText('Request saved');
+  const scenarioRequestId=await page.evaluate(async url=>{
+    const data=await window.__TAURI_INTERNALS__.invoke('read_protected_workspace');
+    const workspace=JSON.parse(data);
+    return workspace.collections.flatMap(c=>c.requests).find(r=>r.url===url)?.id??null;
+  },fixture+'/scenario/login');
+  if(!scenarioRequestId)throw new Error('Native scenario test request not persisted before builder');
   await page.getByRole('tab',{name:'Scenarios'}).click();
   await page.getByRole('button',{name:'Create scenario'}).click();
   const dialog=page.getByRole('dialog',{name:'Scenario Builder'});
   await expect(dialog).toBeVisible();
   await dialog.getByRole('textbox',{name:'Scenario name'}).fill('Native scenario smoke');
+  await dialog.getByRole('combobox',{name:'Saved request for step 1'}).selectOption(scenarioRequestId);
   await dialog.locator('.scenario-step').first().getByRole('button',{name:'Add extraction to step 1'}).click();
   await dialog.locator('.scenario-step').first().getByRole('textbox',{name:'Extract JSON path'}).fill('$.token');
   await dialog.getByRole('button',{name:'Save scenario'}).click();
