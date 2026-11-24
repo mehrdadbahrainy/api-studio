@@ -13,6 +13,7 @@
     <div class="sidebar-tabs" role="tablist" aria-label="Sidebar views">
       <button type="button" [class.selected]="sidebarTab==='collections'" (click)="setSidebarTab('collections')" title="Collections" [attr.aria-selected]="sidebarTab==='collections'" role="tab" aria-label="Collections"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#folder"></use></svg><span>Collections</span></button>
       <button type="button" [class.selected]="sidebarTab==='history'" (click)="setSidebarTab('history')" title="History" [attr.aria-selected]="sidebarTab==='history'" role="tab" aria-label="History"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#history"></use></svg><span>History</span></button>
+      <button type="button" [class.selected]="sidebarTab==='scenarios'" (click)="setSidebarTab('scenarios')" title="Scenarios" [attr.aria-selected]="sidebarTab==='scenarios'" role="tab" aria-label="Scenarios"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#list-checks"></use></svg><span>Scenarios</span></button>
     </div>
     <div class="sidebar-scroll">
       @if (sidebarTab==='collections') {
@@ -64,6 +65,21 @@
           }
         } @empty {
           <div class="sidebar-empty">No matching collections</div>
+        }
+      } @else if(sidebarTab==='scenarios') {
+        <div class="sidebar-heading"><span>SCENARIOS <b>{{workspace.scenarios?.length??0}}</b></span>
+          <button type="button" class="subtle-icon" (click)="createScenario()" title="New scenario" aria-label="New scenario" [disabled]="vaultLocked"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#plus"></use></svg></button></div>
+        @for(scenario of workspace.scenarios??[];track scenario.id){
+          <div class="scenario-nav-entry">
+            <button type="button" class="scenario-nav-link" (click)="openScenario(scenario)" [title]="scenario.name" [attr.aria-label]="'Open scenario '+scenario.name">
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#list-checks"></use></svg>
+              <span class="truncate">{{scenario.name}}</span><small>{{scenario.steps.length}}</small>
+            </button>
+            <button type="button" class="scenario-nav-delete" (click)="deleteScenario(scenario)" [attr.aria-label]="'Delete scenario '+scenario.name" title="Delete scenario"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#trash-2"></use></svg></button>
+          </div>
+        } @empty {
+          <p class="scenario-empty">No saved scenarios yet. Build a test flow from your saved API requests.</p>
+          <button type="button" class="scenario-new-button" (click)="createScenario()">+ Create scenario</button>
         }
       } @else {
         <div class="sidebar-heading"><span>RECENT REQUESTS <b>{{workspace.history.length}}</b></span><button type="button" class="subtle-icon" (click)="clearHistory()" title="Clear history" aria-label="Clear history"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/lucide.svg#trash-2"></use></svg></button></div>
@@ -261,6 +277,115 @@
     </section>
   </div>
 }
+@if(showScenarioDialog && scenarioDraft){
+  <div class="modal-backdrop" (click)="closeScenario()">
+    <section class="modal scenario-dialog" role="dialog" aria-modal="true" aria-labelledby="scenario-heading" (click)="$event.stopPropagation()">
+      <header class="modal-heading">
+        <div><p class="kicker">SCRIPT-FREE API TESTING</p><h2 id="scenario-heading">Scenario Builder</h2>
+          <p>Chain saved requests, capture response values and verify assertions.</p></div>
+        <button type="button" class="modal-close" (click)="closeScenario()" [disabled]="scenarioBusy || scenarioSaving" aria-label="Close Scenario Builder">×</button>
+      </header>
+      <div class="modal-body scenario-body">
+        <fieldset class="scenario-fields" [disabled]="scenarioBusy || scenarioSaving">
+          <div class="scenario-settings">
+            <label>Scenario name <input type="text" [(ngModel)]="scenarioDraft.name" maxlength="120" aria-label="Scenario name"></label>
+            <label class="scenario-stop"><input type="checkbox" [(ngModel)]="scenarioDraft.stopOnFailure" aria-label="Stop on first failure"> Stop on first failure</label>
+          </div>
+          <div class="scenario-security-note">Scenarios use saved requests and the selected Environment. Captured values live only during a run and are never included in the test report. Run sends real HTTP traffic.</div>
+          @for(step of scenarioDraft.steps;track step.id;let stepIndex=$index) {
+            <div class="scenario-step">
+              <div class="scenario-step-header">
+                <strong>Step {{stepIndex+1}}</strong>
+                <div class="scenario-step-controls">
+                  <button type="button" (click)="moveScenarioStep(stepIndex,-1)" [disabled]="stepIndex===0" [attr.aria-label]="'Move step '+(stepIndex+1)+' up'">↑</button>
+                  <button type="button" (click)="moveScenarioStep(stepIndex,1)" [disabled]="stepIndex===scenarioDraft.steps.length-1" [attr.aria-label]="'Move step '+(stepIndex+1)+' down'">↓</button>
+                  <button type="button" (click)="removeScenarioStep(stepIndex)" [disabled]="scenarioDraft.steps.length===1" [attr.aria-label]="'Remove step '+(stepIndex+1)">Remove</button>
+                </div>
+              </div>
+              <label>Saved request
+                <select [(ngModel)]="step.requestId" [attr.aria-label]="'Saved request for step '+(stepIndex+1)">
+                  @for(request of scenarioSavedRequests;track request.id){<option [value]="request.id">{{request.method}} — {{request.name}}</option>}
+                </select>
+              </label>
+              <div class="scenario-rules-heading"><strong>Assertions</strong>
+                <button type="button" (click)="addScenarioAssertion(step)" [disabled]="step.assertions.length>=12" [attr.aria-label]="'Add assertion to step '+(stepIndex+1)">+ Assertion</button></div>
+              @for(assertion of step.assertions;track $index;let ruleIndex=$index){
+                <div class="scenario-rule">
+                  <select [ngModel]="assertion.kind" (ngModelChange)="setScenarioAssertionKind(step,ruleIndex,$event)" [attr.aria-label]="'Assertion type '+(ruleIndex+1)+' step '+(stepIndex+1)">
+                    <option value="status-equals">Status equals</option>
+                    <option value="json-exists">JSON field exists</option>
+                    <option value="json-equals">JSON field equals</option>
+                    <option value="header-contains">Header contains</option>
+                    <option value="duration-below">Duration below</option>
+                  </select>
+                  @if(assertion.kind==='status-equals'){
+                    <input type="number" [(ngModel)]="assertion.expected" min="100" max="599" aria-label="Expected status">
+                  } @else if(assertion.kind==='json-exists'){
+                    <input type="text" [(ngModel)]="assertion.path" maxlength="150" aria-label="JSON field path" placeholder="$.id">
+                  } @else if(assertion.kind==='json-equals'){
+                    <input type="text" [(ngModel)]="assertion.path" maxlength="150" aria-label="JSON field path" placeholder="$.state">
+                    <input type="text" [ngModel]="scenarioExpectedInput(assertion.expected)" (ngModelChange)="setScenarioJsonExpected(assertion,$event)" maxlength="1000" aria-label="Expected JSON value" placeholder="placed / true / 42">
+                  } @else if(assertion.kind==='header-contains'){
+                    <input type="text" [(ngModel)]="assertion.name" maxlength="100" aria-label="Header name" placeholder="content-type">
+                    <input type="text" [(ngModel)]="assertion.expected" maxlength="1000" aria-label="Header substring" placeholder="application/json">
+                  } @else if(assertion.kind==='duration-below'){
+                    <input type="number" [(ngModel)]="assertion.milliseconds" min="1" max="600000" aria-label="Maximum duration milliseconds">
+                  }
+                  <button type="button" class="scenario-rule-remove" (click)="removeScenarioAssertion(step,ruleIndex)" [attr.aria-label]="'Remove assertion '+(ruleIndex+1)">×</button>
+                </div>
+              }
+              <div class="scenario-rules-heading"><strong>Save response value as temporary variable</strong>
+                <button type="button" (click)="addScenarioExtraction(step)" [disabled]="step.extractions.length>=8" [attr.aria-label]="'Add extraction to step '+(stepIndex+1)">+ Extraction</button></div>
+              @for(extraction of step.extractions;track $index;let extractionIndex=$index){
+                <div class="scenario-rule">
+                  <select [ngModel]="extraction.source" (ngModelChange)="setScenarioExtractionSource(step,extractionIndex,$event)" [attr.aria-label]="'Extraction source step '+(stepIndex+1)">
+                    <option value="json">JSON body</option><option value="header">Response header</option><option value="status">HTTP status</option>
+                  </select>
+                  @if(extraction.source==='json'){
+                    <input [(ngModel)]="extraction.path" maxlength="150" placeholder="$.token" aria-label="Extract JSON path">
+                  } @else if(extraction.source==='header'){
+                    <input [(ngModel)]="extraction.name" maxlength="100" placeholder="x-request-id" aria-label="Extract header name">
+                  }
+                  <input [(ngModel)]="extraction.variable" maxlength="64" placeholder="token" aria-label="Variable name">
+                  <label class="scenario-secret"><input type="checkbox" [(ngModel)]="extraction.secret" aria-label="Mark variable as secret"> Secret</label>
+                  <button type="button" class="scenario-rule-remove" (click)="removeScenarioExtraction(step,extractionIndex)" aria-label="Remove extraction">×</button>
+                </div>
+              }
+            </div>
+          }
+          <button type="button" class="button outline" (click)="addScenarioStep()" [disabled]="scenarioDraft.steps.length>=20">+ Add saved request step</button>
+        </fieldset>
+        @if(scenarioError){<p class="scenario-error" role="alert">{{scenarioError}}</p>}
+        @if(scenarioBusy){<p class="scenario-progress" role="status">Running HTTP requests in sequence... Use Cancel to stop remaining steps.</p>}
+        @if(scenarioReport;as report){
+          <div class="scenario-results" role="status" aria-label="Scenario test results">
+            <h3>Test results</h3>
+            <p><strong>{{report.passed}} Passed</strong> · {{report.failed}} Failed · {{report.skipped}} Skipped · {{report.cancelled}} Cancelled</p>
+            @for(result of report.steps;track result.stepId;let ri=$index){
+              <div class="scenario-result" [class.scenario-passed]="result.state==='passed'" [class.scenario-failed]="result.state==='failed'">
+                <span>{{ri+1}}. {{result.state}} — {{result.message}}</span>
+                @if(result.durationMs!==null){<small>{{result.durationMs}} ms</small>}
+                @for(check of result.checks;track $index){
+                  <small>{{check.kind}}: {{check.passed?'Passed':'Failed'}}</small>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+      <footer class="modal-footer scenario-footer">
+        @if(scenarioBusy){
+          <button type="button" class="button outline" (click)="cancelScenario()">Cancel run</button>
+        } @else {
+          <button type="button" class="button outline" (click)="closeScenario()" [disabled]="scenarioSaving">Close</button>
+          <button type="button" class="button outline" (click)="saveScenario()" [disabled]="scenarioSaving">Save scenario</button>
+          <button type="button" class="button primary" (click)="runScenarioFromEditor()" [disabled]="scenarioSaving">Run scenario</button>
+        }
+      </footer>
+    </section>
+  </div>
+}
+
 @if(pendingCloseTabKey){
   <div class="modal-backdrop" (click)="resolveCloseTab('cancel')">
     <section class="modal close-tab-dialog" role="dialog" aria-modal="true" aria-labelledby="close-tab-heading" (click)="$event.stopPropagation()">
