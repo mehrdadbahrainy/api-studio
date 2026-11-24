@@ -12,6 +12,8 @@ import { Folder } from './core/models';
 import { collectionNavigation, ensureFolderPath, folderBreadcrumb, NavigationItem } from './core/folder-utils';
 import { CHANGELOG_URL, DOCUMENTATION_URL, ISSUES_URL, LICENSE_URL, PERSIAN_GUIDE_URL, SOURCE_REPOSITORY, UpdateStatus } from './core/release-catalog';
 import { executeRequest } from './core/http-transport';
+import { ScenarioAssertion, ScenarioDefinition, ScenarioExtraction, ScenarioRunResult, ScenarioStep, runScenario } from './core/scenario-runner';
+import { MAX_SCENARIOS, parseScenarios } from './core/scenario-storage';
 import { loadWorkspace, saveWorkspace, downloadJson } from './core/storage';
 import { addHistory, parseWorkspace, MAX_COLLECTIONS, MAX_REQUESTS, MAX_ENVIRONMENTS } from './core/workspace-utils';
 import { parseImportedJson } from './core/import-json';
@@ -72,7 +74,7 @@ export class AppComponent implements OnDestroy, AfterViewChecked {
   editorTab:EditorTab='params';
   responseTab:ResponseTab='body';
   responseMode:ResponseMode='formatted';
-  sidebarTab:'collections'|'history'='collections';
+  sidebarTab:'collections'|'history'|'scenarios'='collections';
   requestTabs:OpenRequestTab[]=[];
   activeTabKey='';
   pendingCloseTabKey:string|null=null;
@@ -87,6 +89,13 @@ export class AppComponent implements OnDestroy, AfterViewChecked {
   warning='';
   notice='';
   showEnvironments=false;
+  showScenarioDialog=false;
+  scenarioDraft:ScenarioDefinition|null=null;
+  scenarioReport:ScenarioRunResult|null=null;
+  scenarioError='';
+  scenarioBusy=false;
+  scenarioSaving=false;
+  private scenarioController:AbortController|null=null;
   showCreateCollection=false;
   newCollectionName='';
   filter='';
@@ -137,7 +146,7 @@ export class AppComponent implements OnDestroy, AfterViewChecked {
       void this.checkUpdates(true);
     }
   }
-  ngOnDestroy():void {this.controller?.abort();if(this.notificationTimer)clearTimeout(this.notificationTimer);this.isResizingSidebar=false;}
+  ngOnDestroy():void {this.controller?.abort();this.scenarioController?.abort();if(this.notificationTimer)clearTimeout(this.notificationTimer);this.isResizingSidebar=false;}
   private openWorkspace(workspace:Workspace, vault:SecureWorkspace|SystemWorkspace, mode:'system'|'password'):void {
     this.secureWorkspace=vault;
     this.workspace=workspace;
@@ -443,7 +452,7 @@ export class AppComponent implements OnDestroy, AfterViewChecked {
   }
   @HostListener('window:beforeunload',['$event'])
   protectUnsavedTabs(event:BeforeUnloadEvent):void {
-    if(this.requestTabs.some(t=>this.isTabDirty(t))){
+    if(this.requestTabs.some(t=>this.isTabDirty(t)) || (this.showScenarioDialog && this.scenarioHasUnsavedChanges())){
       event.preventDefault();
       event.returnValue='';
     }
@@ -457,7 +466,7 @@ export class AppComponent implements OnDestroy, AfterViewChecked {
     });
   }
   toggleSidebar():void { this.sidebarCollapsed=!this.sidebarCollapsed;this.rememberLayout(); }
-  setSidebarTab(tab:'collections'|'history'):void {
+  setSidebarTab(tab:'collections'|'history'|'scenarios'):void {
     this.sidebarTab=tab;
     if(this.sidebarCollapsed)this.sidebarCollapsed=false;
     this.rememberLayout();
@@ -530,6 +539,178 @@ export class AppComponent implements OnDestroy, AfterViewChecked {
     if(err)this.warning=err;
     return !err;
   }
+
+  get scenarioSavedRequests():RequestDraft[] {
+    return this.workspace.collections.flatMap(collection => collection.requests);
+  }
+  scenarioRequestName(requestId:string):string {
+    return this.scenarioSavedRequests.find(request => request.id === requestId)?.name ?? 'Missing saved request';
+  }
+  private resetScenarioEditor(definition:ScenarioDefinition):void {
+    this.scenarioDraft=parseScenarios([definition])[0];
+    this.scenarioError='';
+    this.scenarioReport=null;
+    this.showScenarioDialog=true;
+    this.showMenu=false;
+  }
+  createScenario():void {
+    if(this.vaultLocked || this.scenarioBusy || this.scenarioSaving)return;
+    if((this.workspace.scenarios?.length??0)>=MAX_SCENARIOS){this.inform('Scenario limit reached (100).');return;}
+    const first=this.scenarioSavedRequests[0];
+    if(!first){this.inform('Save at least one request before creating a scenario.');return;}
+    this.resetScenarioEditor({
+      id:makeId(),name:'New scenario',stopOnFailure:true,
+      steps:[{id:makeId(),requestId:first.id,assertions:[{kind:'status-equals',expected:200}],extractions:[]}]
+    });
+    this.setSidebarTab('scenarios');
+  }
+  openScenario(definition:ScenarioDefinition):void {
+    if(this.vaultLocked || this.scenarioBusy || this.scenarioSaving)return;
+    this.resetScenarioEditor(definition);
+    this.setSidebarTab('scenarios');
+  }
+  scenarioHasUnsavedChanges():boolean {
+    if(!this.scenarioDraft)return false;
+    const saved=this.workspace.scenarios?.find(item => item.id===this.scenarioDraft?.id);
+    if(!saved)return true;
+    return JSON.stringify(saved)!==JSON.stringify(this.scenarioDraft);
+  }
+  closeScenario():void {
+    if(this.scenarioBusy || this.scenarioSaving)return;
+    if(this.scenarioHasUnsavedChanges() && !confirm('Discard unsaved scenario edits?'))return;
+    this.showScenarioDialog=false;
+    this.scenarioDraft=null;
+    this.scenarioReport=null;
+    this.scenarioError='';
+  }
+  addScenarioStep():void {
+    if(!this.scenarioDraft || this.scenarioBusy || this.scenarioDraft.steps.length>=20)return;
+    const first=this.scenarioSavedRequests[0];
+    if(!first){this.scenarioError='Save a request first.';return;}
+    this.scenarioDraft.steps.push({id:makeId(),requestId:first.id,assertions:[{kind:'status-equals',expected:200}],extractions:[]});
+  }
+  moveScenarioStep(index:number,delta:number):void {
+    if(!this.scenarioDraft || this.scenarioBusy)return;
+    const next=index+delta;
+    if(next<0 || next>=this.scenarioDraft.steps.length)return;
+    const steps=this.scenarioDraft.steps;
+    [steps[index],steps[next]]=[steps[next],steps[index]];
+  }
+  removeScenarioStep(index:number):void {
+    if(!this.scenarioDraft || this.scenarioBusy || this.scenarioDraft.steps.length<=1)return;
+    this.scenarioDraft.steps.splice(index,1);
+  }
+  addScenarioAssertion(step:ScenarioStep):void {
+    if(!this.scenarioBusy && step.assertions.length<12)step.assertions.push({kind:'status-equals',expected:200});
+  }
+  setScenarioAssertionKind(step:ScenarioStep,index:number,kind:ScenarioAssertion['kind']):void {
+    if(this.scenarioBusy)return;
+    switch(kind){
+      case 'status-equals':step.assertions[index]={kind,expected:200};break;
+      case 'json-equals':step.assertions[index]={kind,path:'$.ok',expected:true};break;
+      case 'json-exists':step.assertions[index]={kind,path:'$.id'};break;
+      case 'header-contains':step.assertions[index]={kind,name:'content-type',expected:'application/json'};break;
+      case 'duration-below':step.assertions[index]={kind,milliseconds:30000};break;
+    }
+  }
+  removeScenarioAssertion(step:ScenarioStep,index:number):void {
+    if(!this.scenarioBusy)step.assertions.splice(index,1);
+  }
+  addScenarioExtraction(step:ScenarioStep):void {
+    if(!this.scenarioBusy && step.extractions.length<8)
+      step.extractions.push({source:'json',path:'$.token',variable:'token',secret:true});
+  }
+  setScenarioExtractionSource(step:ScenarioStep,index:number,source:ScenarioExtraction['source']):void {
+    if(this.scenarioBusy)return;
+    const previous=step.extractions[index];
+    switch(source){
+      case 'json':step.extractions[index]={source,path:'$.token',variable:previous.variable,secret:previous.secret??false};break;
+      case 'header':step.extractions[index]={source,name:'x-request-id',variable:previous.variable,secret:previous.secret??false};break;
+      case 'status':step.extractions[index]={source,variable:previous.variable,secret:previous.secret??false};break;
+    }
+  }
+  removeScenarioExtraction(step:ScenarioStep,index:number):void {
+    if(!this.scenarioBusy)step.extractions.splice(index,1);
+  }
+  scenarioExpectedInput(value:unknown):string {
+    return typeof value==='string'?value:JSON.stringify(value);
+  }
+  setScenarioJsonExpected(rule:Extract<ScenarioAssertion,{kind:'json-equals'}>,raw:string):void {
+    // JSON literals produce typed booleans/numbers/null; unquoted values remain strings.
+    if(raw==='null'||raw==='true'||raw==='false'||/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(raw)){
+      try {const parsed:unknown=JSON.parse(raw);if(parsed===null||['number','boolean'].includes(typeof parsed)){rule.expected=parsed as number|boolean|null;return;}} catch{/* a free-form string */ }
+    }
+    rule.expected=raw;
+  }
+  async saveScenario():Promise<boolean> {
+    if(!this.scenarioDraft || this.vaultLocked || this.scenarioSaving || this.scenarioBusy)return false;
+    this.scenarioError='';
+    let clean:ScenarioDefinition;
+    try {
+      clean=parseScenarios([this.scenarioDraft])[0];
+      const savedIds=new Set(this.scenarioSavedRequests.map(request=>request.id));
+      if(clean.steps.some(step=>!savedIds.has(step.requestId))){
+        throw new Error('A scenario step references a missing saved request.');
+      }
+    }catch(error){
+      this.scenarioError=error instanceof Error?error.message:'Invalid scenario.';
+      return false;
+    }
+    const original=this.workspace.scenarios;
+    this.workspace.scenarios=[...(original??[]).filter(item=>item.id!==clean.id),clean];
+    this.scenarioSaving=true;
+    try{
+      if(!await this.persist()){
+        this.workspace.scenarios=original;
+        this.scenarioError='Scenario save failed. Your edits remain open; previous workspace preserved.';
+        return false;
+      }
+      this.scenarioDraft=parseScenarios([clean])[0];
+      this.inform('Scenario saved');
+      return true;
+    }finally{this.scenarioSaving=false;}
+  }
+  async deleteScenario(definition:ScenarioDefinition):Promise<void> {
+    if(this.scenarioBusy || this.scenarioSaving || this.vaultLocked)return;
+    if(!confirm('Delete scenario "'+definition.name+'"? Saved requests are preserved.'))return;
+    const original=this.workspace.scenarios;
+    this.workspace.scenarios=(original??[]).filter(item=>item.id!==definition.id);
+    if(!await this.persist()){
+      this.workspace.scenarios=original;
+      this.scenarioError='Could not delete scenario. Previous workspace preserved.';
+      return;
+    }
+    if(this.scenarioDraft?.id===definition.id){
+      this.showScenarioDialog=false;
+      this.scenarioDraft=null;
+      this.scenarioReport=null;
+    }
+    this.inform('Scenario removed');
+  }
+  async runScenarioFromEditor():Promise<void> {
+    if(this.scenarioBusy || this.scenarioSaving || this.running || !this.scenarioDraft || this.vaultLocked)return;
+    if(!await this.saveScenario())return;
+    const definition=this.scenarioDraft!;
+    const steps=definition.steps.length;
+    const environment=this.activeEnvironment?.name??'No environment';
+    if(!confirm('Execute '+steps+' API requests in sequence using '+environment+'? Requests can change server data. Use a safe test environment.'))return;
+    this.scenarioError='';
+    this.scenarioReport=null;
+    this.scenarioBusy=true;
+    const controller=new AbortController();
+    this.scenarioController=controller;
+    try{
+      this.scenarioReport=await runScenario(definition,this.workspace,executeRequest,
+        {signal:controller.signal,environment:this.activeEnvironment,timeoutMs:30_000});
+    }catch{
+      this.scenarioError='Scenario execution could not start. Check its saved steps and try again.';
+    }finally{
+      this.scenarioBusy=false;
+      this.scenarioController=null;
+    }
+  }
+  cancelScenario():void {this.scenarioController?.abort();}
+
   newRequest():void {this.openDraftTab(freshRequest(),null,this.workspace.collections[0]?.id??null);}
   selectRequest(item:RequestDraft):void {
     const existing=this.requestTabs.find(t=>t.savedId===item.id);
@@ -714,11 +895,12 @@ export class AppComponent implements OnDestroy, AfterViewChecked {
   clearHistory():void{if(!confirm('Clear request history? Saved collections will not be changed.'))return;this.workspace.history=[];this.persist();}
   @HostListener('document:keydown',['$event']) onShortcut(event:KeyboardEvent):void {
     const dialog=document.querySelector<HTMLElement>('section[aria-modal="true"]');
-    if(dialog || this.showHelp || this.showEnvironments || this.showSecurityDialog || this.pendingCloseTabKey){
+    if(dialog || this.showHelp || this.showEnvironments || this.showSecurityDialog || this.showScenarioDialog || this.pendingCloseTabKey){
       if(event.key==='Escape'){
         event.preventDefault();
         this.showHelp=false;this.showEnvironments=false;this.pendingCloseTabKey=null;
         if(!this.securityWorking)this.showSecurityDialog=false;
+        if(this.showScenarioDialog)this.closeScenario();
       }else if(event.key==='Tab'){
         event.preventDefault();
         if(dialog){
