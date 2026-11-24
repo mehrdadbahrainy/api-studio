@@ -1,5 +1,6 @@
 import { Collection, Environment, Folder, HistoryEntry, KeyValue, RequestDraft, Workspace, copyRequest, freshRequest, initialWorkspace, makeId } from './models';
 import { parseTabPreferences, resolveSavedTabIds } from './editor-tab-state';
+import { parseScenarios } from './scenario-storage';
 export const MAX_COLLECTIONS = 150;
 export const MAX_REQUESTS = 2000;
 export const MAX_ENVIRONMENTS = 80;
@@ -92,7 +93,8 @@ export function parseWorkspace(raw: unknown): Workspace {
   // Saved tab IDs are nonsecret UI navigation metadata. Preserve them within
   // the *encrypted* Windows workspace because WebView2 localStorage is not
   // guaranteed to flush before process shutdown. Old backups omit this field.
-  const base:Workspace={version:1,collections,environments,selectedEnvironmentId,history,...(folders.length?{folders}:{})};
+  const scenarios=parseScenarios(input.scenarios);
+  const base:Workspace={version:1,collections,environments,selectedEnvironmentId,history,...(folders.length?{folders}:{}),...(input.scenarios!==undefined?{scenarios}:{})};
   if(input.openTabState!==undefined){
     const prefs=parseTabPreferences(JSON.stringify(input.openTabState));
     const validIds=resolveSavedTabIds(base,prefs);
