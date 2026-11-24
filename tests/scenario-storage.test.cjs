@@ -32,7 +32,12 @@ test('extra fields holding runtime tokens, previous response and run results nev
  const parsed=parseWorkspace(w);
  assert.equal(JSON.stringify(parsed).includes('DO_NOT_KEEP_THIS_TOKEN'),false);
  assert.equal(JSON.stringify(w).includes('DO_NOT_KEEP_THIS_TOKEN'),true,'must not mutate source');
- assert.deepEqual(parsed.scenarios[0],valid());
+ const expected={id:s.id,name:s.name,stopOnFailure:s.stopOnFailure,steps:[{
+   id:s.steps[0].id,requestId:s.steps[0].requestId,
+   assertions:[{kind:'status-equals',expected:200},{kind:'json-exists',path:'$.data[0].id'}],
+   extractions:[{source:'json',path:'$.token',variable:'token',secret:true}]
+ }]};
+ assert.deepEqual(parsed.scenarios[0],expected);
 });
 test('over capacity and invalid scenarios reject the entire restore rather than silently drop them',()=>{
  const w=initialWorkspace();
@@ -61,7 +66,8 @@ test('malformed assertions, extractions and illegal identifiers cannot be loaded
 test('scenario storage keeps references without executing or mutating any HTTP request',()=>{
  const w=initialWorkspace();
  const r=w.collections[0].requests[0];
- w.scenarios=[valid()];
+ const scenario=valid();scenario.steps[0].requestId=r.id;
+ w.scenarios=[scenario];
  const before=JSON.stringify(r);
  const parsed=parseWorkspace(w);
  assert.equal(parsed.scenarios[0].steps[0].requestId,r.id);
