@@ -57,6 +57,43 @@ async function realHttpAcceptance(page) {
   console.log('PASS: real native HTTP seven methods, full response timing, inert HTML, oversized body and cancellation');
 }
 
+async function nativeScenarioAcceptance(page) {
+  const fixture='http://127.0.0.1:4311';
+  // Use a real saved request through the installed desktop UI, not browser
+  // mocks or direct Tauri IPC simulation. Protected data is disposable CI-only.
+  await page.getByRole('combobox',{name:'HTTP method'}).selectOption('POST');
+  await page.getByRole('textbox',{name:'Request URL'}).fill(fixture+'/scenario/login');
+  await page.getByRole('button',{name:/Save request/}).click();
+  await expect(page.locator('.toast')).toContainText('Request saved');
+  await page.getByRole('tab',{name:'Scenarios'}).click();
+  await page.getByRole('button',{name:'Create scenario'}).click();
+  const dialog=page.getByRole('dialog',{name:'Scenario Builder'});
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('textbox',{name:'Scenario name'}).fill('Native scenario smoke');
+  await dialog.locator('.scenario-step').first().getByRole('button',{name:'Add extraction to step 1'}).click();
+  await dialog.locator('.scenario-step').first().getByRole('textbox',{name:'Extract JSON path'}).fill('$.token');
+  await dialog.getByRole('button',{name:'Save scenario'}).click();
+  await expect(page.locator('.toast')).toContainText('Scenario saved');
+  page.once('dialog',d=>d.accept());
+  await dialog.getByRole('button',{name:'Run scenario'}).click();
+  const report=dialog.getByRole('status',{name:'Scenario test results'});
+  await expect(report).toContainText('1 Passed',{timeout:30_000});
+  await expect(report).toContainText('0 Failed');
+  const stored=await page.evaluate(async()=>window.__TAURI_INTERNALS__.invoke('read_protected_workspace'));
+  if(!stored||!stored.includes('Native scenario smoke'))throw new Error('Native scenario definition not saved to protected Windows workspace');
+  if(stored.includes('qa-private-fake-token'))throw new Error('Runtime scenario token leaked into native protected workspace');
+  await dialog.getByRole('button',{name:'Close',exact:true}).click();
+  await page.reload();
+  await expect(page.locator('.vault-backdrop')).toBeHidden({timeout:30_000});
+  await page.getByRole('tab',{name:'Scenarios'}).click();
+  await page.getByRole('button',{name:'Open scenario Native scenario smoke'}).click();
+  await expect(page.locator('.scenario-step')).toHaveCount(1);
+  await expect(page.locator('.scenario-results')).toHaveCount(0);
+  await page.getByRole('dialog',{name:'Scenario Builder'}).getByRole('button',{name:'Close',exact:true}).click();
+  await page.getByRole('tab',{name:'Collections'}).click();
+  console.log('PASS: installed MSI/WebView2 Scenario Builder, native HTTP run, protected definition persistence and secret-free results');
+}
+
 async function nativeImportAcceptance(page) {
   for(const version of ['2.0','2.1']){
     const data={info:{name:'Native QA '+version,schema:`https://schema.getpostman.com/json/collection/v${version}.0/collection.json`},item:[{name:'Nested',item:[{name:'Native imported '+version,request:{method:'GET',url:'http://127.0.0.1:4311/echo'}}]}]};
@@ -209,6 +246,7 @@ async function main() {
   await realHttpAcceptance(page);
   await nativeFieldIntegrityAcceptance(page);
   await nativeImportAcceptance(page);
+  await nativeScenarioAcceptance(page);
 
   await page.evaluate(async ([storageKey, data]) => {
     localStorage.setItem(storageKey, JSON.stringify(data));
