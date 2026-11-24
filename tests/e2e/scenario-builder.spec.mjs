@@ -50,15 +50,17 @@ test('user creates, executes and restores script-free four-step Scenario with no
   await dialog.getByRole('combobox', {name:'Saved request for step 1'}).selectOption('login');
 
   await dialog.getByRole('button',{name:'Add extraction to step 1'}).click();
-  await dialog.getByRole('textbox',{name:'Extract JSON path'}).last().fill('$.token');
-  await dialog.getByRole('textbox',{name:'Variable name'}).last().fill('token');
+  const firstStep=dialog.locator('.scenario-step').nth(0);
+  await firstStep.getByRole('textbox',{name:'Extract JSON path'}).fill('$.token');
+  await firstStep.getByRole('textbox',{name:'Variable name'}).fill('token');
 
   await dialog.getByRole('button',{name:'Add saved request step'}).click();
   await dialog.getByRole('combobox',{name:'Saved request for step 2'}).selectOption('create');
   await dialog.getByRole('spinbutton',{name:'Expected status'}).last().fill('201');
   await dialog.getByRole('button',{name:'Add extraction to step 2'}).click();
-  await dialog.getByRole('textbox',{name:'Extract JSON path'}).last().fill('$.id');
-  await dialog.getByRole('textbox',{name:'Variable name'}).last().fill('orderId');
+  const secondStep=dialog.locator('.scenario-step').nth(1);
+  await secondStep.getByRole('textbox',{name:'Extract JSON path'}).fill('$.id');
+  await secondStep.getByRole('textbox',{name:'Variable name'}).fill('orderId');
 
   await dialog.getByRole('button',{name:'Add saved request step'}).click();
   await dialog.getByRole('combobox',{name:'Saved request for step 3'}).selectOption('read');
@@ -69,6 +71,8 @@ test('user creates, executes and restores script-free four-step Scenario with no
 
   await dialog.getByRole('button',{name:'Add saved request step'}).click();
   await dialog.getByRole('combobox',{name:'Saved request for step 4'}).selectOption('ship');
+  await expect(firstStep.getByRole('textbox',{name:'Extract JSON path'})).toHaveValue('$.token');
+  await expect(secondStep.getByRole('textbox',{name:'Extract JSON path'})).toHaveValue('$.id');
   await dialog.getByRole('button',{name:'Save scenario'}).click();
   await expect(page.getByRole('status').filter({hasText:'Scenario saved'})).toBeVisible();
 
