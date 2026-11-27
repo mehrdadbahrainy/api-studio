@@ -14,6 +14,33 @@ const server = http.createServer(async (req, res) => {
     res.end();
     return;
   }
+  // v0.3.0: synthetic multi-step order flow, no real credentials.
+  if (url.pathname === '/scenario/login' && req.method === 'POST') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ token: 'qa-private-fake-token' }));
+    return;
+  }
+  if (url.pathname === '/scenario/orders' && req.method === 'POST') {
+    if (req.headers.authorization !== 'Bearer qa-private-fake-token') {
+      res.writeHead(401, { 'Content-Type': 'application/json' });res.end('{"error":"unauthorized"}');return;
+    }
+    res.writeHead(201, { 'Content-Type': 'application/json' });
+    res.end('{"id":42}');return;
+  }
+  if (url.pathname === '/scenario/orders/42' && req.method === 'GET') {
+    if (req.headers.authorization !== 'Bearer qa-private-fake-token') {
+      res.writeHead(401, { 'Content-Type': 'application/json' });res.end('{"error":"unauthorized"}');return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json','X-Test-Server':'api-studio' });
+    res.end('{"state":"placed"}');return;
+  }
+  if (url.pathname === '/scenario/orders/42' && req.method === 'PATCH') {
+    if (req.headers.authorization !== 'Bearer qa-private-fake-token') {
+      res.writeHead(401, { 'Content-Type': 'application/json' });res.end('{"error":"unauthorized"}');return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end('{"state":"shipped"}');return;
+  }
   if (url.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('ready');
